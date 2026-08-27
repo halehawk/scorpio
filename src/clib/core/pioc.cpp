@@ -1747,6 +1747,18 @@ int PIOc_finalize_impl(int iosysid)
       }
     }
 #endif
+#ifdef _NETCDF
+    if(niosysid == 1){
+      /* All data should already be flushed by now. Free any NetCDF internal structures/objects/memory */
+      nc_finalize();
+    }
+#endif
+#ifdef _HDF5
+    if(niosysid == 1){
+      /* All data should already be flushed by now. Free any HDF5 internal structures/objects/memory */
+      H5close();
+    }
+#endif
 
     LOG((2, "%d iosystems are still open.", niosysid));
     free(ios->io_fstats);
