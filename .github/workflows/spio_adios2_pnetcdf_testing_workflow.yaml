@@ -1,0 +1,114 @@
+---
+#
+# ========== SCORPIO ADIOS2 + PnetCDF testing workflow ============
+# This workflow:
+# 1) Checks out SCORPIO source
+# 2) Installs dependencies via conda: CMake, MPICH, PnetCDF, and ADIOS2 (with SST)
+# 3) Configures SCORPIO with both WITH_ADIOS2=ON and WITH_PNETCDF=ON
+# 4) Builds SCORPIO
+# 5) Runs the full test suite, including ADIOS2 BP5 and SST paired tests
+#
+name: SCORPIO + ADIOS2 + PnetCDF - build and test
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: 'Branch to run the SCORPIO + ADIOS2 + PnetCDF tests'
+        required: true
+        default: 'master'
+  push:
+    branches:
+      - master
+      - 'halehawk/**'
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: '3.11'
+          channels: conda-forge,defaults
+          auto-activate-base: false
+
+      - name: Install dependencies (MPI, PnetCDF, ADIOS2)
+        shell: bash -l {0}
+        run: |
+          conda create -n scorpio_env
+          conda activate scorpio_env
+          conda install -y \
+            conda-forge::cmake \
+            conda-forge::mpich \
+            conda-forge::mpich-mpicc \
+            conda-forge::mpich-mpicxx \
+            conda-forge::mpich-mpifort \
+            conda-forge::libpnetcdf \
+            conda-forge::adios2
+
+      - name: Verify dependency versions
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          echo "=== MPI ==="
+          mpicc --version
+          mpirun --version
+          echo "=== PnetCDF ==="
+          pnetcdf-config --version || true
+          echo "=== ADIOS2 ==="
+          adios2-config --version || true
+          echo "=== CMake ==="
+          cmake --version
+
+      - name: Configure SCORPIO
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          # ADIOS2 installed via conda exposes its CMake config under
+          # $CONDA_PREFIX; pass it via CMAKE_PREFIX_PATH so find_package
+          # (ADIOS2) succeeds without a separate ADIOS2_PATH variable.
+          CC=mpicc CXX=mpicxx FC=mpif90 F77=mpif90 \
+            cmake \
+              -DWITH_PNETCDF:BOOL=TRUE \
+              -DWITH_ADIOS2:BOOL=TRUE \
+              -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}" \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DPIO_USE_MALLOC:BOOL=ON \
+              -DPIO_BUILD_TESTS:BOOL=ON \
+              -DPIO_ENABLE_EXAMPLES:BOOL=ON \
+              -DPIO_ENABLE_TESTS:BOOL=ON \
+              -DPLATFORM:STRING=linux-gnu \
+              -S . -B scorpio_build_dir -LH
+
+      - name: Build SCORPIO
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cmake --build scorpio_build_dir --parallel $(nproc)
+
+      - name: Run SCORPIO tests
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cd scorpio_build_dir
+          # Run all tests; SST paired tests (sst_endtoend, sst_endtoend_f)
+          # are launched via MPMD shell scripts configured by CMake.
+          ctest --output-on-failure --timeout 300
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-logs
+          path: |
+            scorpio_build_dir/Testing/
+            scorpio_build_dir/tests/
+          retention-days: 7
