@@ -56,16 +56,16 @@ int main(int argc, char **argv)
     ret = PIOc_openfile(iosysid, &ncid, &iotype, stream_name, PIO_NOWRITE);
     ERR(ret);
 
-    ret = PIOc_inq_varid(iosysid, ncid, "data", &varid);
+    ret = PIOc_inq_varid(ncid, "data", &varid);
     ERR(ret);
 
     /* Read and verify NFRAMES timesteps */
     int local_errors = 0;
     for (int t = 0; t < NFRAMES; t++) {
         int data[ELEMENTS_PER_PE];
-        ret = PIOc_setframe(iosysid, ncid, varid, t);
+        ret = PIOc_setframe(ncid, varid, t);
         ERR(ret);
-        ret = PIOc_read_darray(iosysid, ncid, varid, ioid,
+        ret = PIOc_read_darray(ncid, varid, ioid,
                                ELEMENTS_PER_PE, data);
         ERR(ret);
 
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
         }
     }
 
-    ret = PIOc_closefile(iosysid, ncid);
+    ret = PIOc_closefile(ncid);
     ERR(ret);
     ret = PIOc_freedecomp(iosysid, ioid);
     ERR(ret);

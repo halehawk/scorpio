@@ -58,11 +58,11 @@ int main(int argc, char **argv)
     ERR(ret);
 
     /* Define global dimension and variable */
-    ret = PIOc_def_dim(iosysid, ncid, "x", (PIO_Offset)gdim, &dimid);
+    ret = PIOc_def_dim(ncid, "x", (PIO_Offset)gdim, &dimid);
     ERR(ret);
-    ret = PIOc_def_var(iosysid, ncid, "data", PIO_INT, NDIMS, &dimid, &varid);
+    ret = PIOc_def_var(ncid, "data", PIO_INT, NDIMS, &dimid, &varid);
     ERR(ret);
-    ret = PIOc_enddef(iosysid, ncid);
+    ret = PIOc_enddef(ncid);
     ERR(ret);
 
     /* Write NFRAMES timesteps */
@@ -71,16 +71,16 @@ int main(int argc, char **argv)
         for (int i = 0; i < ELEMENTS_PER_PE; i++)
             data[i] = t * 1000 + my_rank * ELEMENTS_PER_PE + i;
 
-        ret = PIOc_setframe(iosysid, ncid, varid, t);
+        ret = PIOc_setframe(ncid, varid, t);
         ERR(ret);
-        ret = PIOc_write_darray(iosysid, ncid, varid, ioid,
+        ret = PIOc_write_darray(ncid, varid, ioid,
                                 ELEMENTS_PER_PE, data, NULL);
         ERR(ret);
     }
 
-    ret = PIOc_sync(iosysid, ncid);
+    ret = PIOc_sync(ncid);
     ERR(ret);
-    ret = PIOc_closefile(iosysid, ncid);
+    ret = PIOc_closefile(ncid);
     ERR(ret);
     ret = PIOc_freedecomp(iosysid, ioid);
     ERR(ret);
