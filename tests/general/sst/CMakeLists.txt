@@ -17,10 +17,16 @@ set(DEFAULT_SST_TEST_TIMEOUT 300)
 # 2 ranks run the writer, 2 ranks run the reader.
 add_spio_executable(pio_sst_writer TRUE C
     ${CMAKE_CURRENT_SOURCE_DIR}/pio_sst_writer.c)
+target_include_directories(pio_sst_writer PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/clib
+    ${PROJECT_BINARY_DIR}/src/clib)
 add_dependencies(tests pio_sst_writer)
 
 add_spio_executable(pio_sst_reader TRUE C
     ${CMAKE_CURRENT_SOURCE_DIR}/pio_sst_reader.c)
+target_include_directories(pio_sst_reader PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/clib
+    ${PROJECT_BINARY_DIR}/src/clib)
 add_dependencies(tests pio_sst_reader)
 
 configure_file(
