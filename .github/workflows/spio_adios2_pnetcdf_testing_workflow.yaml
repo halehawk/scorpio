@@ -65,9 +65,6 @@ jobs:
           pnetcdf-config --version || true
           echo "=== ADIOS2 conda package ==="
           conda list adios2
-          echo "=== ADIOS2 config ==="
-          adios2-config --version || true
-          adios2-config --features || true
           echo "=== CMake ==="
           cmake --version
 
