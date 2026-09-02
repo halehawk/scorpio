@@ -620,6 +620,8 @@ CONTAINS
       ! adiosc
       num_iotypes = num_iotypes + 1
 #endif
+      ! adios_sst
+      num_iotypes = num_iotypes + 1
 #endif
 #ifdef _HDF5
       ! hdf5
@@ -652,6 +654,10 @@ CONTAINS
       iotype_descs(i) = "ADIOSC"
       i = i + 1
 #endif
+      ! adios_sst
+      iotypes(i) = PIO_iotype_adios_sst
+      iotype_descs(i) = "ADIOS_SST"
+      i = i + 1
 #endif
 #ifdef _HDF5
       ! hdf5
@@ -1457,6 +1463,11 @@ CONTAINS
         (str == "adiosc") .OR.&
         (str == "ADIOSC")) THEN
       PIO_TF_Iotype_from_str = PIO_IOTYPE_ADIOSC
+    ELSE IF((str == "PIO_IOTYPE_ADIOS_SST") .OR.&
+        (str == "pio_iotype_adios_sst") .OR.&
+        (str == "adios_sst") .OR.&
+        (str == "ADIOS_SST")) THEN
+      PIO_TF_Iotype_from_str = PIO_iotype_adios_sst
     ELSE IF((str == "PIO_IOTYPE_HDF5") .OR.&
         (str == "pio_iotype_hdf5") .OR.&
         (str == "hdf5") .OR.&

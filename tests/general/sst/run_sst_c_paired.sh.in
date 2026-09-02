@@ -1,0 +1,18 @@
+#!/bin/bash
+# run_sst_c_paired.sh — launch C SST writer and reader concurrently.
+# Configured by CMake; do not edit this .in template directly.
+#
+# Uses MPMD mode to run writer and reader as separate MPI jobs within a
+# single mpirun invocation, so SST rendezvous occurs without extra setup.
+
+WRITER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_writer"
+READER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_reader"
+MPIEXEC="@MPIEXEC@"
+NUMPROC="@MPIEXEC_NUMPROC_FLAG@"
+PREFLAGS="@MPIEXEC_PREFLAGS@"
+POSTFLAGS="@MPIEXEC_POSTFLAGS@"
+NPROCS=2
+
+# MPMD: 2 ranks run the writer, 2 ranks run the reader, all in one mpirun
+exec $MPIEXEC $NUMPROC $NPROCS $PREFLAGS $WRITER $POSTFLAGS \
+    : $NUMPROC $NPROCS $PREFLAGS $READER $POSTFLAGS

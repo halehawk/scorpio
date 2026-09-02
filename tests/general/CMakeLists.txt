@@ -805,3 +805,8 @@ add_pio_test(pio_iosystem_tests3
   MINSTRIDE 1
   MAXSTRIDE ${PIO_TF_C1_MAXSTRIDE}
   TIMEOUT ${DEFAULT_TEST_TIMEOUT})
+
+#===== ADIOS2 SST streaming tests =====
+if (WITH_ADIOS2)
+  add_subdirectory(sst)
+endif (WITH_ADIOS2)

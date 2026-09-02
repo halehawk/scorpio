@@ -43,8 +43,8 @@ stream.
 ### User Story 2 - Read a live SST stream through SCORPIO's existing read API (Priority: P1)
 
 A model developer builds a SCORPIO-based consumer application that reads a stream
-produced by an SST writer using the same public read API (e.g. `PIOc_read_darray` and
-related calls) that SCORPIO already provides for the ADIOS2 BP-file engine, so that
+produced by an SST writer using the same public read API that SCORPIO already provides
+for the ADIOS2 BP-file engine (the distributed-array read and related calls), so that
 existing SCORPIO-based analysis code can be pointed at a live stream with minimal changes.
 
 **Why this priority**: Without a matching consumer path inside SCORPIO itself, the
@@ -162,9 +162,14 @@ error rather than a generic I/O failure or an indefinite hang.
   than failing silently or falling back to a different engine.
 - **FR-007**: SCORPIO's automated test suite MUST include at least one paired
   writer/reader test that exercises the SST engine end-to-end (stream open, metadata
-  exchange, timestep data write/read, stream close).
+  exchange, timestep data write/read, stream close). The test MUST run in parallel
+  across multiple MPI ranks (not as a serial test) and MUST be executable via CTest
+  without manual MPI launcher invocation.
 - **FR-008**: SCORPIO MUST document, and its behavior MUST match, that only a single
   concurrent reader per SST stream is supported in this feature's scope.
+- **FR-009**: Every SST engine capability exposed through SCORPIO's C API MUST also be
+  accessible through SCORPIO's Fortran API, maintaining full parity between the two
+  language interfaces.
 
 ### Key Entities
 
@@ -191,7 +196,9 @@ error rather than a generic I/O failure or an indefinite hang.
 - **SC-004**: 100% of the SST-specific configuration parameters listed in FR-004 are
   settable without modifying application source code.
 - **SC-005**: The paired writer/reader SST test (FR-007) passes reliably in CI/nightly
-  testing across supported platforms.
+  testing across supported platforms, running in a multi-rank parallel configuration.
+- **SC-006**: All SST capabilities available via the C API are equally accessible through
+  the Fortran API, verified by at least one Fortran-language acceptance test.
 
 ## Assumptions
 
@@ -209,3 +216,5 @@ error rather than a generic I/O failure or an indefinite hang.
 - Default values for SST-specific parameters (transport, marshaling method, queue limit,
   rendezvous timeout) follow ADIOS2's own upstream SST defaults unless a SCORPIO-specific
   override is explicitly configured.
+- Both C and Fortran API interfaces are in scope and must maintain parity, consistent with
+  SCORPIO's project-wide Fortran-interface requirement for all public C API additions.

@@ -431,7 +431,10 @@ enum PIO_IOTYPE
     PIO_IOTYPE_HDF5 = 8,
 
     /** HDF5 library (Parallel I/O, NetCDF4/HDF5 compressed file format) */
-    PIO_IOTYPE_HDF5C = 9
+    PIO_IOTYPE_HDF5C = 9,
+
+    /** ADIOS library (Parallel I/O, ADIOS SST streaming engine, no persistent file) */
+    PIO_IOTYPE_ADIOS_SST = 10
 };
 
 /**

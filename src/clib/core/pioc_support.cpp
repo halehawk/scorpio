@@ -477,22 +477,73 @@ static int initialize_adios2_variables(iosystem_desc_t *ios, file_desc_t *file)
     if (file->adios_io_process == 1)
     {
         adios2_error adiosErr = adios2_error_none;
-        adiosErr = adios2_set_parameter(file->ioH, "CollectiveMetadata", "ON");
-        if (adiosErr != adios2_error_none)
+        if (file->iotype != PIO_IOTYPE_ADIOS_SST)
         {
-            GPTLstop("PIO:initialize_adios2_variables");
-            return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                           "Setting (ADIOS) parameter (CollectiveMetadata=ON) failed (adios2_error=%s) for file (%s)",
-                           convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
-        }
+            adiosErr = adios2_set_parameter(file->ioH, "CollectiveMetadata", "ON");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) parameter (CollectiveMetadata=ON) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
 
-        adiosErr = adios2_set_parameter(file->ioH, "StatsLevel", "0");
-        if (adiosErr != adios2_error_none)
+            adiosErr = adios2_set_parameter(file->ioH, "StatsLevel", "0");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) parameter (StatsLevel=0) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
+        }
+        else /* SST */
         {
-            GPTLstop("PIO:initialize_adios2_variables");
-            return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                           "Setting (ADIOS) parameter (StatsLevel=0) failed (adios2_error=%s) for file (%s)",
-                           convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            /* Set SST-specific defaults */
+            adiosErr = adios2_set_parameter(file->ioH, "RendezvousReaderCount", "1");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) SST parameter (RendezvousReaderCount=1) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
+
+            adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "WAN");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) SST parameter (DataTransport=WAN) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
+
+            adiosErr = adios2_set_parameter(file->ioH, "ControlTransport", "enet");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) SST parameter (ControlTransport=enet) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
+
+            adiosErr = adios2_set_parameter(file->ioH, "OpenTimeoutSecs", "60");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) SST parameter (OpenTimeoutSecs=60) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
+
+            adiosErr = adios2_set_parameter(file->ioH, "InitialBufferSize", "1Gb");
+            if (adiosErr != adios2_error_none)
+            {
+                GPTLstop("PIO:initialize_adios2_variables");
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Setting (ADIOS) SST parameter (InitialBufferSize=1Gb) failed (adios2_error=%s) for file (%s)",
+                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+            }
         }
     }
 
@@ -3061,31 +3112,51 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
 #endif /* SPIO_NO_CXX_REGEX */
     }
 
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         LOG((2, "Calling adios_open mode = %d", file->mode));
 
-        file->filename = (char*)calloc(adios_bp_filename_len, sizeof(char));
-        if (file->filename == NULL)
+        if (file->iotype == PIO_IOTYPE_ADIOS_SST)
         {
-            spio_ltimer_stop(file->io_fstats->wr_timer_name);
-            spio_ltimer_stop(file->io_fstats->tot_timer_name);
-            return pio_err(ios, NULL, PIO_ENOMEM, __FILE__, __LINE__,
-                           "Creating file (%s) using ADIOS iotype failed. Out of memory allocating %lld bytes for the file name",
-                           filename, (unsigned long long) (adios_bp_filename_len));
-        }
-        snprintf(file->filename, adios_bp_filename_len, "%s%s", filename, adios_bp_filename_extn);
-
-        if (file->mode & PIO_NOCLOBBER) /* Check whether BP directory filename.bp exists */
-        {
-            struct stat sd;
-            if (0 == stat(file->filename, &sd))
+            /* SST streams have no on-disk file; use the stream name directly */
+            int sst_stream_name_len = strlen(filename) + 1;
+            file->filename = (char*)calloc(sst_stream_name_len, sizeof(char));
+            if (file->filename == NULL)
             {
                 spio_ltimer_stop(file->io_fstats->wr_timer_name);
                 spio_ltimer_stop(file->io_fstats->tot_timer_name);
-                return pio_err(ios, NULL, PIO_EEXIST, __FILE__, __LINE__,
-                               "Creating file (%s) using ADIOS iotype and PIO_NOCLOBBER mode failed. BP directory (%s) already exists",
-                               filename, file->filename);
+                return pio_err(ios, NULL, PIO_ENOMEM, __FILE__, __LINE__,
+                               "Creating SST stream (%s) failed. Out of memory allocating %d bytes for stream name",
+                               filename, sst_stream_name_len);
+            }
+            strncpy(file->filename, filename, sst_stream_name_len - 1);
+            file->filename[sst_stream_name_len - 1] = '\0';
+        }
+        else
+        {
+            file->filename = (char*)calloc(adios_bp_filename_len, sizeof(char));
+            if (file->filename == NULL)
+            {
+                spio_ltimer_stop(file->io_fstats->wr_timer_name);
+                spio_ltimer_stop(file->io_fstats->tot_timer_name);
+                return pio_err(ios, NULL, PIO_ENOMEM, __FILE__, __LINE__,
+                               "Creating file (%s) using ADIOS iotype failed. Out of memory allocating %lld bytes for the file name",
+                               filename, (unsigned long long) (adios_bp_filename_len));
+            }
+            snprintf(file->filename, adios_bp_filename_len, "%s%s", filename, adios_bp_filename_extn);
+
+            if (file->mode & PIO_NOCLOBBER) /* Check whether BP directory filename.bp exists */
+            {
+                struct stat sd;
+                if (0 == stat(file->filename, &sd))
+                {
+                    spio_ltimer_stop(file->io_fstats->wr_timer_name);
+                    spio_ltimer_stop(file->io_fstats->tot_timer_name);
+                    return pio_err(ios, NULL, PIO_EEXIST, __FILE__, __LINE__,
+                                   "Creating file (%s) using ADIOS iotype and PIO_NOCLOBBER mode failed. BP directory (%s) already exists",
+                                   filename, file->filename);
+                }
             }
         }
 
@@ -3125,14 +3196,15 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                                declare_name, pio_get_fname_from_file(file));
             }
 
-            adiosErr = adios2_set_engine(file->ioH, "BP5"); /* was BP4 */
+            const char *engine_type = (file->iotype == PIO_IOTYPE_ADIOS_SST) ? "SST" : "BP5";
+            adiosErr = adios2_set_engine(file->ioH, engine_type);
             if (adiosErr != adios2_error_none)
             {
                 spio_ltimer_stop(file->io_fstats->wr_timer_name);
                 spio_ltimer_stop(file->io_fstats->tot_timer_name);
                 return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                               "Setting (ADIOS) engine (type=BP4) failed (adios2_error=%s) for file (%s)",
-                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+                               "Setting (ADIOS) engine (type=%s) failed (adios2_error=%s) for file (%s)",
+                               engine_type, convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
             }
         }
 
@@ -3167,19 +3239,28 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                 GPTLstop("PIO:adios2_open_call");
                 spio_ltimer_stop(file->io_fstats->wr_timer_name);
                 spio_ltimer_stop(file->io_fstats->tot_timer_name);
+                if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+                    return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                                   "Opening SST stream (%s) failed. "
+                                   "No reader attached before the rendezvous timeout. "
+                                   "Ensure the reader is started and uses the same stream name.",
+                                   pio_get_fname_from_file(file));
                 return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
                                "Opening (ADIOS) file (%s) failed",
                                pio_get_fname_from_file(file));
             }
             GPTLstop("PIO:adios2_open_call");
 
-            if(file->adios_rank == 0)
+            if (file->iotype != PIO_IOTYPE_ADIOS_SST)
             {
-                const std::string adios_bp_md_filename(std::string(file->filename) + "/md.0");
-                ierr = symlink(adios_bp_md_filename.c_str(), filename);
-                if(ierr != 0)
+                if(file->adios_rank == 0)
                 {
-                    fprintf(stdout, "PIO: WARNING: Creating symlink for ADIOS BP mdata file (%s) failed, ierr = %d", adios_bp_md_filename.c_str(), ierr);
+                    const std::string adios_bp_md_filename(std::string(file->filename) + "/md.0");
+                    ierr = symlink(adios_bp_md_filename.c_str(), filename);
+                    if(ierr != 0)
+                    {
+                        fprintf(stdout, "PIO: WARNING: Creating symlink for ADIOS BP mdata file (%s) failed, ierr = %d", adios_bp_md_filename.c_str(), ierr);
+                    }
                 }
             }
 
@@ -4750,6 +4831,70 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
 #endif
     }
   }
+  /* SST engine: streaming, no on-disk file */
+  else if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+  {
+    adios2_error adiosErr = adios2_error_none;
+    char declare_name[PIO_MAX_NAME] = {'\0'};
+
+    strncpy(file->fname, filename, PIO_MAX_NAME - 1);
+    snprintf(declare_name, PIO_MAX_NAME, "%s_sst_rd_%lu", filename, get_adios2_io_cnt());
+    strncpy(file->io_name_reader, declare_name, PIO_MAX_NAME);
+
+    file->ioH = adios2_declare_io(ios->adios_readerH, file->io_name_reader);
+    if (file->ioH == NULL)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "The low level (ADIOS) I/O library call failed to declare a new io handler",
+                     filename);
+    }
+
+    adiosErr = adios2_set_engine(file->ioH, "SST");
+    if (adiosErr != adios2_error_none)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "The low level (ADIOS) I/O library call failed to set SST engine (adios2_error=%s)",
+                     filename, convert_adios2_error_to_string(adiosErr));
+    }
+
+    adiosErr = adios2_set_parameter(file->ioH, "RendezvousReaderCount", "1");
+    if (adiosErr != adios2_error_none)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "The low level (ADIOS) I/O library call failed to set RendezvousReaderCount (adios2_error=%s)",
+                     filename, convert_adios2_error_to_string(adiosErr));
+    }
+
+    file->engineH = adios2_open(file->ioH, filename, adios2_mode_read);
+    if (file->engineH == NULL)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) using ADIOS SST engine failed. "
+                     "Check that the SST writer is running and the stream name matches. "
+                     "If no writer attached within the rendezvous timeout, "
+                     "this indicates a rendezvous timeout for SST stream (%s).",
+                     filename, filename);
+    }
+  }
 #endif
 
 #ifdef _HDF5
@@ -5491,7 +5636,8 @@ int iotype_is_valid(int iotype)
 #endif /* _PNETCDF */
 
 #ifdef _ADIOS2
-    if ((iotype == PIO_IOTYPE_ADIOS) || (iotype == PIO_IOTYPE_ADIOSC))
+    if ((iotype == PIO_IOTYPE_ADIOS) || (iotype == PIO_IOTYPE_ADIOSC)
+        || (iotype == PIO_IOTYPE_ADIOS_SST))
         ret++;
 #endif
 
