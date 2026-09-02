@@ -10,7 +10,6 @@
  *
  * Validates: FR-002, FR-003, FR-007, SC-002, SC-005 from the feature spec.
  */
-#include "config.h"
 #include "pio.h"
 #include <mpi.h>
 #include <stdio.h>
