@@ -52,7 +52,7 @@ jobs:
             conda-forge::mpich-mpicxx \
             conda-forge::mpich-mpifort \
             conda-forge::libpnetcdf \
-            conda-forge::adios2
+            "conda-forge::adios2=*=mpi_mpich_*"
 
       - name: Verify dependency versions
         shell: bash -l {0}
