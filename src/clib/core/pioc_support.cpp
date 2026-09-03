@@ -3209,15 +3209,17 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
 
             if (file->iotype == PIO_IOTYPE_ADIOS_SST)
             {
-                /* Use MPI for data transport so SST works in environments
-                 * without RDMA or libfabric (e.g. CI runners). */
-                adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "MPI");
+                /* Discard steps that the reader has not consumed so the writer
+                 * never blocks waiting for a slow or disconnected reader.
+                 * DataTransport=WAN (TCP) is already set by initialize_adios2_variables
+                 * and is compatible with separate-process mpirun launches. */
+                adiosErr = adios2_set_parameter(file->ioH, "QueueFullPolicy", "Discard");
                 if (adiosErr != adios2_error_none)
                 {
                     spio_ltimer_stop(file->io_fstats->wr_timer_name);
                     spio_ltimer_stop(file->io_fstats->tot_timer_name);
                     return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                                   "Setting SST DataTransport=MPI failed (adios2_error=%s) for file (%s)",
+                                   "Setting SST QueueFullPolicy=Discard failed (adios2_error=%s) for file (%s)",
                                    convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
                 }
             }
@@ -4882,9 +4884,10 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
                      filename, convert_adios2_error_to_string(adiosErr));
     }
 
-    /* Use MPI for data transport so SST works in environments
-     * without RDMA or libfabric (e.g. CI runners). */
-    adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "MPI");
+    /* WAN (TCP) transport works without RDMA or libfabric (e.g. CI runners)
+     * and is compatible with separate-process mpirun launches where the writer
+     * and reader run in independent MPI universes. */
+    adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "WAN");
     if (adiosErr != adios2_error_none)
     {
       spio_ltimer_stop(ios->io_fstats->rd_timer_name);
@@ -4893,7 +4896,33 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
       spio_ltimer_stop(file->io_fstats->tot_timer_name);
       return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
                      "Opening SST stream (%s) failed. "
-                     "Setting SST DataTransport=MPI failed (adios2_error=%s)",
+                     "Setting SST DataTransport=WAN failed (adios2_error=%s)",
+                     filename, convert_adios2_error_to_string(adiosErr));
+    }
+
+    adiosErr = adios2_set_parameter(file->ioH, "ControlTransport", "enet");
+    if (adiosErr != adios2_error_none)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "Setting SST ControlTransport=enet failed (adios2_error=%s)",
+                     filename, convert_adios2_error_to_string(adiosErr));
+    }
+
+    adiosErr = adios2_set_parameter(file->ioH, "OpenTimeoutSecs", "60");
+    if (adiosErr != adios2_error_none)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "Setting SST OpenTimeoutSecs=60 failed (adios2_error=%s)",
                      filename, convert_adios2_error_to_string(adiosErr));
     }
 

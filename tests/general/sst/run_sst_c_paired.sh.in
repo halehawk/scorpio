@@ -1,9 +1,12 @@
 #!/bin/bash
-# run_sst_c_paired.sh — launch C SST writer and reader concurrently.
+# run_sst_c_paired.sh — launch C SST writer in the background, then reader.
 # Configured by CMake; do not edit this .in template directly.
 #
-# Uses MPMD mode to run writer and reader as separate MPI jobs within a
-# single mpirun invocation, so SST rendezvous occurs without extra setup.
+# The writer is started first as a background process so it can create the
+# SST contact file before the reader connects.  The reader blocks at
+# adios2_open until the writer is available (OpenTimeoutSecs=60).
+# Using two separate mpirun invocations avoids MPMD complexity and keeps
+# each process in its own MPI universe, compatible with WAN/TCP transport.
 
 WRITER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_writer"
 READER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_reader"
@@ -13,6 +16,23 @@ PREFLAGS="@MPIEXEC_PREFLAGS@"
 POSTFLAGS="@MPIEXEC_POSTFLAGS@"
 NPROCS=2
 
-# MPMD: 2 ranks run the writer, 2 ranks run the reader, all in one mpirun
-exec $MPIEXEC $NUMPROC $NPROCS $PREFLAGS $WRITER $POSTFLAGS \
-    : $NUMPROC $NPROCS $PREFLAGS $READER $POSTFLAGS
+# Start writer in background; it will wait for the reader to connect
+export SstVerbose=5
+$MPIEXEC $NUMPROC $NPROCS $PREFLAGS $WRITER $POSTFLAGS &
+WRITER_PID=$!
+
+# Start reader; blocks at open until writer is ready, then connects and closes
+export SstVerbose=5
+$MPIEXEC $NUMPROC $NPROCS $PREFLAGS $READER $POSTFLAGS
+READER_EXIT=$?
+
+# Wait for writer to finish
+wait $WRITER_PID
+WRITER_EXIT=$?
+
+# Fail if either process failed
+if [ $READER_EXIT -ne 0 ] || [ $WRITER_EXIT -ne 0 ]; then
+    echo "SST C test FAILED: reader_exit=$READER_EXIT writer_exit=$WRITER_EXIT" >&2
+    exit 1
+fi
+exit 0

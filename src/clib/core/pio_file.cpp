@@ -289,7 +289,8 @@ static int sync_file(int ncid)
     spio_ltimer_start(file->io_fstats->tot_timer_name);
 
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         if (file->mode & PIO_WRITE)
         {
@@ -564,9 +565,69 @@ int spio_hard_closefile(iosystem_desc_t *ios, file_desc_t *file,
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         adios2_error adiosErr = adios2_error_none;
+
+        /* SST write close: end any open step and close the engine */
+        if (file->iotype == PIO_IOTYPE_ADIOS_SST && (file->mode & PIO_WRITE))
+        {
+            if (file->adios_io_process == 1 && file->engineH != NULL)
+            {
+                ierr = end_adios2_step(file, ios);
+                if (ierr != PIO_NOERR)
+                {
+                    return pio_err(NULL, file, ierr, __FILE__, __LINE__,
+                                   "adios2_end_step failed for SST file (%s)",
+                                   pio_get_fname_from_file(file));
+                }
+                adiosErr = adios2_close(file->engineH);
+                if (adiosErr != adios2_error_none)
+                {
+                    return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                                   "Closing SST stream (%s, ncid=%d) failed (adios2_error=%s)",
+                                   pio_get_fname_from_file(file), file->pio_ncid,
+                                   convert_adios2_error_to_string(adiosErr));
+                }
+                file->engineH = NULL;
+            }
+            if (file->filename != NULL)
+            {
+                free(file->filename);
+                file->filename = NULL;
+            }
+            return PIO_NOERR;
+        }
+
+        /* SST read close: just close the engine */
+        if (file->iotype == PIO_IOTYPE_ADIOS_SST && !(file->mode & PIO_WRITE))
+        {
+            if (file->engineH != NULL)
+            {
+                adiosErr = adios2_close(file->engineH);
+                if (adiosErr != adios2_error_none)
+                {
+                    return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                                   "Closing SST stream (%s, ncid=%d) failed (adios2_error=%s)",
+                                   pio_get_fname_from_file(file), file->pio_ncid,
+                                   convert_adios2_error_to_string(adiosErr));
+                }
+                file->engineH = NULL;
+                file->begin_step_called = 0;
+            }
+            adios2_bool result = adios2_false;
+            adiosErr = adios2_remove_io(&result, ios->adios_readerH, file->io_name_reader);
+            if (adiosErr != adios2_error_none)
+            {
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Closing SST stream (%s, ncid=%d) failed. "
+                               "adios2_remove_io failed (adios2_error=%s)",
+                               pio_get_fname_from_file(file), file->pio_ncid,
+                               convert_adios2_error_to_string(adiosErr));
+            }
+            return PIO_NOERR;
+        }
 
         if (file->mode & PIO_WRITE) /* ADIOS write mode */
         {

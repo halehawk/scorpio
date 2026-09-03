@@ -2007,7 +2007,8 @@ int PIOc_write_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen, c
        arraylen, iodesc->ndof));
 
 #ifdef _ADIOS2
-  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+     || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
     /* ADIOS type does not support open to append mode */
     if(file->is_reopened){
       GPTLstop("PIO:PIOc_write_darray");
@@ -2154,7 +2155,8 @@ int PIOc_write_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen, c
   LOG((3, "wmb->ioid = %d wmb->recordvar = %d", wmb->ioid, wmb->recordvar));
 
 #ifdef _ADIOS2
-  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+     || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
     ierr = PIO_NOERR;
     ierr = PIOc_write_darray_adios(file, varid, ioid, iodesc, arraylen, array, fillvalue);
     GPTLstop("PIO:write_total_adios");

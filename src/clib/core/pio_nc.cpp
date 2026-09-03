@@ -3150,7 +3150,8 @@ int PIOc_enddef_impl(int ncid)
     }
 #endif /* _HDF5 */
 
-    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+       || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
       /* Do nothing - no "enddef" - for ADIOS I/O types. Just a sanity check here */
       if(!file->in_def_mode){
         ierr = pio_err(ios, file, PIO_EINTERNAL, __FILE__, __LINE__,
@@ -3354,7 +3355,8 @@ int PIOc_def_dim_impl(int ncid, const char *name, PIO_Offset len, int *idp)
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         LOG((2, "ADIOS define dimension %s with size %llu, id = %d",
                 name, (unsigned long long)len, file->num_dim_vars));
@@ -3652,7 +3654,8 @@ int PIOc_def_var_impl(int ncid, const char *name, nc_type xtype, int ndims,
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         LOG((2, "ADIOS pre-define variable %s (%d dimensions, type %d)", name, ndims, xtype));
 
