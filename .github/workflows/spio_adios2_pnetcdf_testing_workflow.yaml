@@ -28,6 +28,11 @@ on:  # yamllint disable-line rule:truthy
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+    env:
+      MPICH_CC: gcc-13
+      MPICH_CXX: g++-13
+      MPICH_FC: gfortran-13
+      MPICH_F77: gfortran-13
 
     steps:
       - name: Checkout repository
@@ -83,7 +88,6 @@ jobs:
           # ADIOS2 installed via conda exposes its CMake config under
           # $CONDA_PREFIX; pass it via CMAKE_PREFIX_PATH so find_package
           # (ADIOS2) succeeds without a separate ADIOS2_PATH variable.
-          MPICH_CC=gcc-13 MPICH_CXX=g++-13 MPICH_F77=gfortran-13 MPICH_FC=gfortran-13 \
           CC=mpicc CXX=mpicxx FC=mpif90 F77=mpif90 \
             cmake \
               -DWITH_PNETCDF:BOOL=TRUE \
