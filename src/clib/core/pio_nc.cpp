@@ -586,7 +586,8 @@ int PIOc_inq_type_impl(int ncid, nc_type xtype, char *name, PIO_Offset *sizep)
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         if (sizep)
         {

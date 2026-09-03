@@ -5370,6 +5370,7 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
 #ifdef _ADIOS2
   case PIO_IOTYPE_ADIOS:
   case PIO_IOTYPE_ADIOSC:
+  case PIO_IOTYPE_ADIOS_SST:
       break; /* This case has been handled above */
 #endif
   default:
