@@ -3206,6 +3206,21 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                                "Setting (ADIOS) engine (type=%s) failed (adios2_error=%s) for file (%s)",
                                engine_type, convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
             }
+
+            if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+            {
+                /* Use MPI for data transport so SST works in environments
+                 * without RDMA or libfabric (e.g. CI runners). */
+                adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "MPI");
+                if (adiosErr != adios2_error_none)
+                {
+                    spio_ltimer_stop(file->io_fstats->wr_timer_name);
+                    spio_ltimer_stop(file->io_fstats->tot_timer_name);
+                    return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                                   "Setting SST DataTransport=MPI failed (adios2_error=%s) for file (%s)",
+                                   convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
+                }
+            }
         }
 
         /* Initialize adios I/O related parameters */
@@ -4864,6 +4879,21 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
       return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
                      "Opening SST stream (%s) failed. "
                      "The low level (ADIOS) I/O library call failed to set SST engine (adios2_error=%s)",
+                     filename, convert_adios2_error_to_string(adiosErr));
+    }
+
+    /* Use MPI for data transport so SST works in environments
+     * without RDMA or libfabric (e.g. CI runners). */
+    adiosErr = adios2_set_parameter(file->ioH, "DataTransport", "MPI");
+    if (adiosErr != adios2_error_none)
+    {
+      spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+      spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+      spio_ltimer_stop(file->io_fstats->rd_timer_name);
+      spio_ltimer_stop(file->io_fstats->tot_timer_name);
+      return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                     "Opening SST stream (%s) failed. "
+                     "Setting SST DataTransport=MPI failed (adios2_error=%s)",
                      filename, convert_adios2_error_to_string(adiosErr));
     }
 
