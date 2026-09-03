@@ -1245,7 +1245,8 @@ int PIOc_inq_var_impl(int ncid, int varid, char *name, int namelen, nc_type *xty
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         if (varid < file->num_vars)
         {
@@ -1714,7 +1715,8 @@ int PIOc_inq_varid_impl(int ncid, const char *name, int *varidp)
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         ierr = PIO_ENOTVAR;
         for (int i = 0; i < file->num_vars; i++)

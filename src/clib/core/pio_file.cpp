@@ -600,11 +600,25 @@ int spio_hard_closefile(iosystem_desc_t *ios, file_desc_t *file,
             return PIO_NOERR;
         }
 
-        /* SST read close: just close the engine */
+        /* SST read close: end any open step, then close the engine */
         if (file->iotype == PIO_IOTYPE_ADIOS_SST && !(file->mode & PIO_WRITE))
         {
             if (file->engineH != NULL)
             {
+                /* Release the step that was held open since openfile */
+                if (file->begin_step_called == 1)
+                {
+                    adiosErr = adios2_end_step(file->engineH);
+                    if (adiosErr != adios2_error_none)
+                    {
+                        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                                       "Closing SST stream (%s, ncid=%d) failed. "
+                                       "adios2_end_step failed (adios2_error=%s)",
+                                       pio_get_fname_from_file(file), file->pio_ncid,
+                                       convert_adios2_error_to_string(adiosErr));
+                    }
+                    file->begin_step_called = 0;
+                }
                 adiosErr = adios2_close(file->engineH);
                 if (adiosErr != adios2_error_none)
                 {

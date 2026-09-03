@@ -247,6 +247,17 @@ Task T024: Register Fortran CTest sst_writer_reader_f
 
 ### Total Task Count: 37 tasks across 7 phases
 
+---
+
+## Phase 8: Convergence
+
+- [ ] T038 Implement SST per-step read model in `src/clib/core/pioc_support.cpp`: add `adios2_begin_step` / `adios2_available_variables` / `adios2_available_attributes` / metadata-population / `adios2_end_step` loop for SST iotype, callable from `PIOc_read_darray`; detect `adios2_step_status_end_of_stream` and return `PIO_EIO` with stream name per FR-003, US2-AC1, US1-AC2 (missing)
+- [ ] T039 Wire SST `begin_step`/`end_step` into `PIOc_read_darray` in `src/clib/core/pioc_support.cpp`: for `PIO_IOTYPE_ADIOS_SST` iotype, call per-step metadata discovery before the variable read and `end_step` after; verify `pio_sst_reader.c` and `pio_sst_reader_f.F90` tests pass after this change per FR-003, SC-002, SC-005 (missing)
+- [ ] T040 Add parameterized CTest `sst_writer_reader_queued` in `tests/general/sst/CMakeLists.txt`: pass `QueueLimit=2` to the C writer via command-line arg or env var using the existing `file->params` mechanism; verify via test exit code that queue backpressure takes effect per T028, SC-004, FR-004 (missing)
+- [ ] T041 Register CTest `sst_timeout_error` in `tests/general/sst/CMakeLists.txt` (WILL_FAIL property or asserted non-zero exit): run `pio_sst_writer` with short `OpenTimeoutSecs` passed via params and no reader launched; assert non-zero exit code and verify error message contains stream name — depends on T038/T039 per T032, FR-005, SC-003 (missing)
+- [ ] T042 Add comment block to `tests/general/sst/CMakeLists.txt` documenting the Constitution IV MPMD exception: explain why CTest-native MPI invocation cannot handle two-executable SST rendezvous and that `$MPIEXEC` via shell script is the required workaround; add corresponding note to `AGENTS.md` constraints section per Constitution IV (contradicts)
+- [ ] T043 In `src/clib/core/pioc_support.cpp`, add an SST-specific error branch for non-ADIOS2 builds: when `PIO_IOTYPE_ADIOS_SST` is used without `_ADIOS2` compiled in, emit "PIO_IOTYPE_ADIOS_SST requires ADIOS2 with SST transport support" rather than the generic "invalid iotype" message per FR-006, edge case (partial)
+
 | Phase | Story | Tasks | Notes |
 |-------|-------|-------|-------|
 | 1 Setup | — | T001–T002 | 2 tasks |

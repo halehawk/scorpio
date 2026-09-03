@@ -14,6 +14,7 @@
 #include <dirent.h>
 
 #include <adios2.h>
+#include <adios2/cxx11_mpi.h>
 
 #include "pio.h"
 #include "pio_internal.h"

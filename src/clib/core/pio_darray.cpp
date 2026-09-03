@@ -2639,6 +2639,16 @@ static int PIOc_read_darray_adios(file_desc_t *file, int fndims, io_desc_t *iode
     decomp_info_buff = (const int *) file->cache_darray_info->get(file->cache_darray_info, decomp_name);
     if (decomp_info_buff == NULL)
     {
+      /* SST: decomp info must have been cached during openfile step-0 scan.
+       * Close/reopen is not possible for streaming engines. */
+      if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+      {
+        return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                       "Reading variable (%s, varid=%d) from SST stream (%s) failed. "
+                       "Decomposition info for variable not found in cache — "
+                       "ensure the SST openfile metadata scan succeeded",
+                       pio_get_vname_from_file(file, varid), varid, pio_get_fname_from_file(file));
+      }
       if (file->store_adios_decomp)
       {
         /* We should search decomposition array from the step 0 if the decomp info is not in the cache, so we close and open the bp file */
@@ -3021,6 +3031,17 @@ static int PIOc_read_darray_adios(file_desc_t *file, int fndims, io_desc_t *iode
 
     if (required_adios_step < current_adios_step)
     {
+        /* SST is a forward-only streaming engine; backward step navigation is impossible. */
+        if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+            return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                           "Reading variable (%s, varid=%d) from SST stream (%s) failed. "
+                           "SST does not support backward step navigation "
+                           "(required_step=%d < current_step=%zu). "
+                           "Frames must be read in ascending order.",
+                           pio_get_vname_from_file(file, varid), varid,
+                           pio_get_fname_from_file(file),
+                           required_adios_step, current_adios_step);
+
         if (file->begin_step_called == 1)
         {
             adiosErr = adios2_end_step(file->engineH);
@@ -3447,7 +3468,8 @@ int PIOc_read_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen,
             "unknown rearranger", __FILE__, __LINE__);
 
   /* Get var description. */
-  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+      || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
 #ifdef _ADIOS2
     vdesc_adios2 = &(file->adios_vars[varid]);
 #endif
@@ -3465,7 +3487,8 @@ int PIOc_read_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen,
     spio_ltimer_stop(file->io_fstats->tot_timer_name);
 
     /* Find out PIO data type of var. */
-    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
 #ifdef _ADIOS2
       assert(vdesc_adios2->nc_type != PIO_NAT);
       vdesc_adios2->adios_type = spio_get_adios_type(vdesc_adios2->nc_type);
@@ -3483,7 +3506,8 @@ int PIOc_read_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen,
     }
 
     /* Find out length of type. */
-    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+    if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+        || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
 #ifdef _ADIOS2
       if(vdesc_adios2->adios_type_size == 0){
         vdesc_adios2->adios_type_size = get_adios2_type_size(vdesc_adios2->adios_type, NULL);
@@ -3507,7 +3531,8 @@ int PIOc_read_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen,
     spio_ltimer_start(file->io_fstats->tot_timer_name);
   }
 
-  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)){
+  if((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC)
+      || (file->iotype == PIO_IOTYPE_ADIOS_SST)){
 #ifdef _ADIOS2
     ios->io_fstats->rb += vdesc_adios2->adios_type_size * iodesc->llen;
     file->io_fstats->rb += vdesc_adios2->adios_type_size * iodesc->llen;
@@ -3638,6 +3663,7 @@ int PIOc_read_darray_impl(int ncid, int varid, int ioid, PIO_Offset arraylen,
   #ifdef _ADIOS2
         case PIO_IOTYPE_ADIOS:
         case PIO_IOTYPE_ADIOSC:
+        case PIO_IOTYPE_ADIOS_SST:
             if((ierr = PIOc_read_darray_adios(file, fndims, iodesc, varid, array))){
               return pio_err(ios, file, ierr, __FILE__, __LINE__,
                              "Reading variable (%s, varid=%d) from file (%s, ncid=%d) using ADIOS iotype failed. "

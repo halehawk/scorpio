@@ -4360,8 +4360,9 @@ static adios_interval_map_t* init_interval_map(file_desc_t *file, int varid, siz
 static int adios_get_step_info(file_desc_t *file, int varid, size_t adios_step, size_t n_adios_steps)
 {
     /* Get relevant adios step */
-    assert(file->adios_vars[varid].interval_map == NULL);
-    file->adios_vars[varid].interval_map = init_interval_map(file, varid, n_adios_steps);
+    /* SST openfile calls adios_get_step_info at scan time; allow re-use of existing map */
+    if (file->adios_vars[varid].interval_map == NULL)
+        file->adios_vars[varid].interval_map = init_interval_map(file, varid, n_adios_steps);
 
     /* Try to look up the frame_id */
     char const *frame_id_name = adios_name(adios_pio_track_frame_id_prefix, file->adios_vars[varid].name, "");
@@ -4953,6 +4954,142 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
                      "this indicates a rendezvous timeout for SST stream (%s).",
                      filename, filename);
     }
+
+    /* SST step-0 metadata scan.
+     * Initialize the same structures used by the BP5 read path so that
+     * PIOc_read_darray_adios works unchanged for SST.
+     * We begin step 0 (blocking until the writer completes its first step),
+     * scan all variables and attributes, populate the interval_map and the
+     * cache_darray_info hash table, then leave step 0 open so that the
+     * first PIOc_read_darray call can immediately read data without
+     * calling adios2_begin_step again. */
+    {
+      adios2_error adiosErr = adios2_error_none;
+
+      /* Initialize adios variable structures */
+      for (size_t sst_vi = 0; sst_vi < (size_t)PIO_MAX_VARS; sst_vi++)
+      {
+        file->adios_vars[sst_vi].nc_type = PIO_NAT;
+        file->adios_vars[sst_vi].adios_type = adios2_type_unknown;
+        file->adios_vars[sst_vi].adios_type_size = 0;
+        file->adios_vars[sst_vi].nattrs = 0;
+        file->adios_vars[sst_vi].ndims = 0;
+        file->adios_vars[sst_vi].adios_varid = 0;
+        file->adios_vars[sst_vi].decomp_varid = 0;
+        file->adios_vars[sst_vi].frame_varid = 0;
+        file->adios_vars[sst_vi].fillval_varid = 0;
+        file->adios_vars[sst_vi].gdimids = NULL;
+        file->adios_vars[sst_vi].interval_map = NULL;
+      }
+
+      file->cache_data_blocks = spio_hash(10000);
+      file->cache_block_sizes = spio_hash(10000);
+      file->cache_darray_info = spio_hash(10000);
+      file->adios_reader_num_decomp_blocks = 0;
+      file->store_adios_decomp = true;
+
+      /* Begin step 0 — blocks until the SST writer finishes its first step */
+      adios2_step_status sst_status = adios2_step_status_other_error;
+      adiosErr = adios2_begin_step(file->engineH, adios2_step_mode_read, 60.0, &sst_status);
+      if (adiosErr != adios2_error_none || sst_status == adios2_step_status_end_of_stream)
+      {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                       "Opening SST stream (%s) failed. "
+                       "adios2_begin_step did not find any data (status=%d, adios2_error=%s)",
+                       filename, (int)sst_status, convert_adios2_error_to_string(adiosErr));
+      }
+      file->begin_step_called = 1;
+
+      /* Scan available variables */
+      size_t sst_var_size = 0;
+      char **sst_var_names = adios2_available_variables(file->ioH, &sst_var_size);
+      if (sst_var_names == NULL)
+      {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                       "Opening SST stream (%s) failed. "
+                       "adios2_available_variables returned NULL", filename);
+      }
+
+      adios_read_global_dimensions(ios, file, sst_var_names, sst_var_size);
+      adios_read_vars_vars(file, sst_var_size, sst_var_names);
+      for (size_t sst_i = 0; sst_i < sst_var_size; sst_i++) { free(sst_var_names[sst_i]); }
+      free(sst_var_names);
+
+      /* Scan available attributes for variable metadata (ndims, nc_type, etc.) */
+      size_t sst_attr_size = 0;
+      char **sst_attr_names = adios2_available_attributes(file->ioH, &sst_attr_size);
+      if (sst_attr_names == NULL)
+      {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                       "Opening SST stream (%s) failed. "
+                       "adios2_available_attributes returned NULL", filename);
+      }
+
+      adios_read_vars_attrs(file, sst_attr_size, sst_attr_names);
+      for (size_t sst_i = 0; sst_i < sst_attr_size; sst_i++) { free(sst_attr_names[sst_i]); }
+      free(sst_attr_names);
+
+      /* Initialize per-variable metadata (type, dims, nc_op_tag, step → frame map) */
+      for (int sst_vi2 = 0; sst_vi2 < file->num_vars; sst_vi2++)
+      {
+        adios_get_nc_type(file, sst_vi2);
+        adios_get_adios_type(file, sst_vi2);
+        adios_get_ndims(file, sst_vi2);
+        adios_get_nc_op_tag(file, sst_vi2);
+        adios_get_dim_ids(file, sst_vi2);
+        /* Build interval_map for step 0 (n_adios_steps=1 since SST is streaming) */
+        adios_get_step_info(file, sst_vi2, 0, 1);
+      }
+
+      adios_get_num_decomp_blocks(file);
+      adios_get_decomp_storage_info(file);
+
+      /* Cache the var→decomp_id attribute mappings used by PIOc_read_darray_adios */
+      sst_attr_names = adios2_available_attributes(file->ioH, &sst_attr_size);
+      if (sst_attr_names != NULL)
+      {
+        for (size_t sst_i = 0; sst_i < sst_attr_size; sst_i++)
+        {
+          if (strncmp(sst_attr_names[sst_i], adios_pio_var_prefix, strlen(adios_pio_var_prefix)) == 0 &&
+              strstr(sst_attr_names[sst_i], adios_def_decomp_suffix) != NULL)
+          {
+            adios2_attribute const *sst_attrH = adios2_inquire_attribute(file->ioH, sst_attr_names[sst_i]);
+            if (sst_attrH != NULL)
+            {
+              size_t sst_attr_data_size = 0;
+              char *sst_attr_data = (char *)calloc(PIO_MAX_NAME, 1);
+              if (sst_attr_data != NULL)
+              {
+                adiosErr = adios2_attribute_data(sst_attr_data, &sst_attr_data_size, sst_attrH);
+                if (adiosErr == adios2_error_none)
+                  file->cache_darray_info->put(file->cache_darray_info, sst_attr_names[sst_i], sst_attr_data);
+                else
+                  free(sst_attr_data);
+              }
+            }
+          }
+          free(sst_attr_names[sst_i]);
+        }
+        free(sst_attr_names);
+      }
+
+      /* Keep step 0 open; do NOT call adios2_end_step here.
+       * PIOc_read_darray_adios will read all frames from this step directly.
+       * PIOc_closefile will call end_adios2_step to release it. */
+      file->current_frame = 0;
+    }
   }
 #endif
 
@@ -4999,7 +5136,9 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
   */
 
 #ifdef _ADIOS2
-  file->num_dim_vars = 0;
+  /* SST openfile already populated num_dim_vars during step-0 scan; preserve it */
+  if (file->iotype != PIO_IOTYPE_ADIOS_SST)
+    file->num_dim_vars = 0;
 #endif
 
   for(int i = 0; i < PIO_MAX_VARS; i++){
