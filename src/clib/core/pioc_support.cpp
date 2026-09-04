@@ -4966,7 +4966,26 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
     {
       adios2_error adiosErr = adios2_error_none;
 
-      /* Initialize adios variable structures */
+      /* Begin step 0 IMMEDIATELY after adios2_open — must happen before any
+       * time-consuming work to avoid a race where the SST writer finishes and
+       * closes before we call adios2_begin_step (file->iosystem is not yet set
+       * here, so pass NULL for file in pio_err to avoid a null-deref crash). */
+      adios2_step_status sst_status = adios2_step_status_other_error;
+      adiosErr = adios2_begin_step(file->engineH, adios2_step_mode_read, 60.0, &sst_status);
+      if (adiosErr != adios2_error_none || sst_status == adios2_step_status_end_of_stream)
+      {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                       "Opening SST stream (%s) failed. "
+                       "adios2_begin_step did not find any data (status=%d, adios2_error=%s)",
+                       filename, (int)sst_status, convert_adios2_error_to_string(adiosErr));
+      }
+      file->begin_step_called = 1;
+
+      /* Initialize adios variable structures (step 0 is now held open) */
       for (size_t sst_vi = 0; sst_vi < (size_t)PIO_MAX_VARS; sst_vi++)
       {
         file->adios_vars[sst_vi].nc_type = PIO_NAT;
@@ -4988,22 +5007,6 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
       file->adios_reader_num_decomp_blocks = 0;
       file->store_adios_decomp = true;
 
-      /* Begin step 0 — blocks until the SST writer finishes its first step */
-      adios2_step_status sst_status = adios2_step_status_other_error;
-      adiosErr = adios2_begin_step(file->engineH, adios2_step_mode_read, 60.0, &sst_status);
-      if (adiosErr != adios2_error_none || sst_status == adios2_step_status_end_of_stream)
-      {
-        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
-        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
-        spio_ltimer_stop(file->io_fstats->rd_timer_name);
-        spio_ltimer_stop(file->io_fstats->tot_timer_name);
-        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                       "Opening SST stream (%s) failed. "
-                       "adios2_begin_step did not find any data (status=%d, adios2_error=%s)",
-                       filename, (int)sst_status, convert_adios2_error_to_string(adiosErr));
-      }
-      file->begin_step_called = 1;
-
       /* Scan available variables */
       size_t sst_var_size = 0;
       char **sst_var_names = adios2_available_variables(file->ioH, &sst_var_size);
@@ -5013,7 +5016,7 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
         spio_ltimer_stop(ios->io_fstats->tot_timer_name);
         spio_ltimer_stop(file->io_fstats->rd_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
-        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+        return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
                        "Opening SST stream (%s) failed. "
                        "adios2_available_variables returned NULL", filename);
       }
@@ -5032,7 +5035,7 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
         spio_ltimer_stop(ios->io_fstats->tot_timer_name);
         spio_ltimer_stop(file->io_fstats->rd_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
-        return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+        return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
                        "Opening SST stream (%s) failed. "
                        "adios2_available_attributes returned NULL", filename);
       }
