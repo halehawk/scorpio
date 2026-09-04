@@ -69,7 +69,7 @@ int main(int argc, char **argv)
         ret = PIOc_setframe(ncid, varid, t);
         ERR(ret);
 
-        ret = PIOc_read_darray(ncid, varid, ioid, ELEMENTS_PER_PE, buf, NULL);
+        ret = PIOc_read_darray(ncid, varid, ioid, (PIO_Offset)ELEMENTS_PER_PE, buf);
         ERR(ret);
 
         for (int i = 0; i < ELEMENTS_PER_PE; i++) {
