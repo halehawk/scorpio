@@ -3207,22 +3207,6 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                                engine_type, convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
             }
 
-            if (file->iotype == PIO_IOTYPE_ADIOS_SST)
-            {
-                /* Discard steps that the reader has not consumed so the writer
-                 * never blocks waiting for a slow or disconnected reader.
-                 * DataTransport=WAN (TCP) is already set by initialize_adios2_variables
-                 * and is compatible with separate-process mpirun launches. */
-                adiosErr = adios2_set_parameter(file->ioH, "QueueFullPolicy", "Discard");
-                if (adiosErr != adios2_error_none)
-                {
-                    spio_ltimer_stop(file->io_fstats->wr_timer_name);
-                    spio_ltimer_stop(file->io_fstats->tot_timer_name);
-                    return pio_err(ios, NULL, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                                   "Setting SST QueueFullPolicy=Discard failed (adios2_error=%s) for file (%s)",
-                                   convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
-                }
-            }
         }
 
         /* Initialize adios I/O related parameters */
