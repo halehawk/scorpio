@@ -300,6 +300,20 @@ static int sync_file(int ncid)
         spio_ltimer_stop(ios->io_fstats->tot_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
 
+        /* SST write sync: end the current step so the reader can acquire a
+         * reference to it before the writer closes.  Without this, end_step
+         * and close both fire in closefile back-to-back; SstClose discards
+         * step 0 because no reader holds it yet.  After this call the reader's
+         * blocked begin_step can return and the writer can then close cleanly. */
+        if (file->iotype == PIO_IOTYPE_ADIOS_SST && (file->mode & PIO_WRITE))
+        {
+            ierr = end_adios2_step(file, ios);
+            if (ierr != PIO_NOERR)
+                return pio_err(ios, file, ierr, __FILE__, __LINE__,
+                               "PIOc_sync: end_adios2_step failed for SST file (%s)",
+                               pio_get_fname_from_file(file));
+        }
+
         return ierr;
     }
 #endif
