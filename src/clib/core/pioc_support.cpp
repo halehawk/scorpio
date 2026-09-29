@@ -4118,7 +4118,24 @@ static int adios_get_dim_ids(file_desc_t *file, int varid)
                 }
             }
 
-            adiosErr = adios2_attribute_data(attr_data, &size_attr, attr);
+            /* A 1-element string array can come back as a single-value string
+             * attribute (seen with the SST engine). adios2_attribute_data then
+             * expects a char* rather than a char**, so passing the pointer array
+             * would overwrite the pointers themselves. */
+            adios2_bool is_value = adios2_false;
+            adiosErr = adios2_attribute_is_value(&is_value, attr);
+            if (adiosErr != adios2_error_none)
+            {
+                return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Getting dimension IDs for variable (%s, varid = %d) in file (%s, ncid=%d) using ADIOS iotype failed. "
+                               "The low level (ADIOS) I/O library call failed to query whether the attribute is a single value (adios2_error=%s)",
+                               file->adios_vars[varid].name, varid, pio_get_fname_from_file(file), file->pio_ncid, convert_adios2_error_to_string(adiosErr));
+            }
+
+            if (is_value == adios2_true)
+                adiosErr = adios2_attribute_data(attr_data[0], &size_attr, attr);
+            else
+                adiosErr = adios2_attribute_data(attr_data, &size_attr, attr);
             if (adiosErr != adios2_error_none)
             {
                 return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
