@@ -1462,7 +1462,7 @@ int pio_err(iosystem_desc_t *ios, file_desc_t *file,
     LOG((1, "ERROR: %s. %s err_num = %d fname = %s line = %d", uerr_msg, err_msg, err_num, fname ? fname : "\0", line));
 
     /* What error handler should we use? */
-    if (file)
+    if (file && file->iosystem)
     {
         ios = file->iosystem;
         err_handler = ios->error_handler;
@@ -4703,6 +4703,11 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
   file->reserve_extra_header_space = false; /* Set to true for creating output NetCDF files only. */
   file->in_def_mode = false; /* The file is NOT in "define mode" when opened */
   file->is_reopened = true;
+  /* Set iosystem immediately so pio_err(NULL, file, ...) is safe from any point
+   * in this function. The SST branch below begins reading and scanning metadata
+   * right after adios2_open, before the iotype-specific blocks below would
+   * otherwise have set this, so it must not be deferred. */
+  file->iosystem = ios;
   strncpy(file->fname, filename, PIO_MAX_NAME);
   pio_create_uniq_str(ios, NULL, tname, "tmp_", "_file");
 
@@ -5102,7 +5107,8 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
   }
 #endif
 
-  file->iosystem = ios;
+  /* file->iosystem was already set earlier, right after allocation, so that
+   * pio_err() is safe throughout this function (see comment near file->fh = -1). */
   file->mode = mode;
   /*
   file->num_unlim_dimids = 0;
