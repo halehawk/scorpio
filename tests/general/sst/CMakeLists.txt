@@ -41,6 +41,21 @@ add_test(NAME sst_endtoend
 set_tests_properties(sst_endtoend PROPERTIES
     TIMEOUT ${DEFAULT_SST_TEST_TIMEOUT})
 
+#===== Same writer/reader on an ADIOS BP file (no SST) =====
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_sst_c_bp_readback.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/run_sst_c_bp_readback.sh
+    @ONLY)
+file(CHMOD ${CMAKE_CURRENT_BINARY_DIR}/run_sst_c_bp_readback.sh
+     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                 GROUP_READ GROUP_EXECUTE
+                 WORLD_READ WORLD_EXECUTE)
+
+add_test(NAME sst_bp_readback
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/run_sst_c_bp_readback.sh)
+set_tests_properties(sst_bp_readback PROPERTIES
+    TIMEOUT ${DEFAULT_SST_TEST_TIMEOUT})
+
 #===== pio_sst_writer_f / pio_sst_reader_f (Fortran, separate writer+reader executables) =====
 # Launched together via MPMD mpirun through a configured shell script.
 if (CMAKE_Fortran_COMPILER_WORKS OR CMAKE_Fortran_COMPILER)

@@ -1,0 +1,35 @@
+#!/bin/bash
+# run_sst_c_bp_readback.sh — write the SST test data to an ADIOS BP file with
+# pio_sst_writer, then read it back and verify it with pio_sst_reader.
+# Configured by CMake; do not edit this .in template directly.
+#
+# Uses the same writer/reader as sst_endtoend, switched to PIO_IOTYPE_ADIOS
+# via SPIO_SST_TEST_IOTYPE=bp. This checks SCORPIO's BP write + read path for
+# the same metadata SST has to carry (e.g. /__pio__/var/data/def/dims).
+
+WRITER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_writer"
+READER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_reader"
+MPIEXEC="@MPIEXEC@"
+NUMPROC="@MPIEXEC_NUMPROC_FLAG@"
+PREFLAGS="@MPIEXEC_PREFLAGS@"
+POSTFLAGS="@MPIEXEC_POSTFLAGS@"
+NPROCS=2
+FNAME="scorpio_sst_bp_readback"
+
+cd "@CMAKE_CURRENT_BINARY_DIR@" || exit 1
+export SPIO_SST_TEST_IOTYPE=bp
+
+$MPIEXEC $NUMPROC $NPROCS $PREFLAGS $WRITER $FNAME $POSTFLAGS
+WRITER_EXIT=$?
+if [ $WRITER_EXIT -ne 0 ]; then
+    echo "SST BP readback test FAILED: writer_exit=$WRITER_EXIT" >&2
+    exit 1
+fi
+
+$MPIEXEC $NUMPROC $NPROCS $PREFLAGS $READER $FNAME $POSTFLAGS
+READER_EXIT=$?
+if [ $READER_EXIT -ne 0 ]; then
+    echo "SST BP readback test FAILED: reader_exit=$READER_EXIT" >&2
+    exit 1
+fi
+exit 0

@@ -14,6 +14,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define NDIMS           1
 #define NFRAMES         3
@@ -52,8 +53,12 @@ int main(int argc, char **argv)
     ERR(ret);
     free(compdof);
 
-    /* Open SST stream (reader side) — blocks until writer is available */
+    /* Open SST stream (reader side) — blocks until writer is available.
+     * SPIO_SST_TEST_IOTYPE=bp reads a BP file written by pio_sst_writer instead. */
     int iotype = PIO_IOTYPE_ADIOS_SST;
+    const char *iotype_env = getenv("SPIO_SST_TEST_IOTYPE");
+    if (iotype_env && strcmp(iotype_env, "bp") == 0)
+        iotype = PIO_IOTYPE_ADIOS;
     ret = PIOc_openfile(iosysid, &ncid, &iotype, stream_name, PIO_NOWRITE);
     ERR(ret);
 
