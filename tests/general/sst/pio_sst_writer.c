@@ -14,6 +14,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define NDIMS           1
 #define NFRAMES         3
@@ -52,8 +53,12 @@ int main(int argc, char **argv)
     ERR(ret);
     free(compdof);
 
-    /* Open SST stream (writer side) */
+    /* Open SST stream (writer side). SPIO_SST_TEST_IOTYPE=bp writes the same
+     * data to an ADIOS BP file instead, so its metadata can be inspected with bpls. */
     int iotype = PIO_IOTYPE_ADIOS_SST;
+    const char *iotype_env = getenv("SPIO_SST_TEST_IOTYPE");
+    if (iotype_env && strcmp(iotype_env, "bp") == 0)
+        iotype = PIO_IOTYPE_ADIOS;
     ret = PIOc_createfile(iosysid, &ncid, &iotype, stream_name, PIO_CLOBBER);
     ERR(ret);
 

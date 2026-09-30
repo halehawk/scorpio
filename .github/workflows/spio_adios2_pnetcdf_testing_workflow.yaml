@@ -107,6 +107,18 @@ jobs:
           conda activate scorpio_env
           cmake --build scorpio_build_dir --parallel $(nproc)
 
+      - name: Dump SST writer metadata via BP (diagnostic)
+        shell: bash -l {0}
+        continue-on-error: true
+        run: |
+          conda activate scorpio_env
+          cd scorpio_build_dir/tests/general/sst
+          # Same writer as sst_endtoend, but writing an ADIOS BP file, so we can
+          # see exactly what the writer defines (e.g. /__pio__/var/data/def/dims).
+          SPIO_SST_TEST_IOTYPE=bp mpiexec -n 2 ./pio_sst_writer scorpio_bp_dump
+          ls -la scorpio_bp_dump*
+          bpls -la scorpio_bp_dump.bp
+
       - name: Run SCORPIO tests
         shell: bash -l {0}
         run: |
