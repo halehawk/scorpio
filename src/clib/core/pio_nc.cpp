@@ -3773,6 +3773,13 @@ int PIOc_def_var_impl(int ncid, const char *name, nc_type xtype, int ndims,
                                            att_name, av->ndims, pio_get_fname_from_file(file), file->pio_ncid);
                         }
                     }
+
+                    if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+                    {
+                        ierr = spio_define_adios2_sst_dim_attrs(ios, file, av->name, dimnames, av->ndims);
+                        if (ierr != PIO_NOERR)
+                            return ierr;
+                    }
                 }
                 file->num_written_blocks += 3;
             }

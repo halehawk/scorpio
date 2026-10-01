@@ -430,6 +430,8 @@ extern "C" {
                                                  const char *name, const adios2_type type, const size_t ndims,
                                                  const size_t *shape, const size_t *start, const size_t *count,
                                                  const adios2_constant_dims constant_dims);
+    int spio_define_adios2_sst_dim_attrs(iosystem_desc_t *ios, file_desc_t *file, const char *var_name,
+                                         char *const *dimnames, int ndims);
 #endif
 
 /* Asynchronous I/O services start with the following seq num */
