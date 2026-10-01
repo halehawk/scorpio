@@ -33,6 +33,9 @@ jobs:
       MPICH_CXX: g++-13
       MPICH_FC: gfortran-13
       MPICH_F77: gfortran-13
+      # Some runners have an Azure MANA adapter that UCX fails to initialize,
+      # which makes MPI_Init abort; restrict UCX to shared memory and TCP.
+      UCX_TLS: self,sm,tcp
 
     steps:
       - name: Checkout repository
