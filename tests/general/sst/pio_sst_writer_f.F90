@@ -84,7 +84,8 @@ program pio_sst_writer_f
       data(i) = t * 1000 + my_rank * ELEMENTS_PER_PE + (i - 1)
     end do
 
-    frame_num = int(t, PIO_OFFSET_KIND)
+    ! pio_setframe takes 1-based frame numbers (it passes frame - 1 to C)
+    frame_num = int(t + 1, PIO_OFFSET_KIND)
     call pio_setframe(file, vdesc, frame_num)
     call pio_write_darray(file, vdesc, iodesc, data, ret)
     if (ret /= PIO_noerr) then

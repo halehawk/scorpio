@@ -70,7 +70,8 @@ program pio_sst_reader_f
   ! Read and verify NFRAMES timesteps
   errors = 0
   do t = 0, NFRAMES - 1
-    frame_num = int(t, PIO_OFFSET_KIND)
+    ! pio_setframe takes 1-based frame numbers (it passes frame - 1 to C)
+    frame_num = int(t + 1, PIO_OFFSET_KIND)
     call pio_setframe(file, vdesc, frame_num)
 
     call pio_read_darray(file, vdesc, iodesc, buf, ret)
