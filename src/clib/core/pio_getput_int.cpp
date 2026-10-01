@@ -74,7 +74,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
 #endif
 
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         /* ADIOS type does not support open to append mode */
         if (file->is_reopened)
@@ -94,7 +94,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
     }
 #endif
 
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         GPTLstart("PIO:write_total_adios");
     }
@@ -107,7 +107,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
         spio_ltimer_stop(ios->io_fstats->tot_timer_name);
         spio_ltimer_stop(file->io_fstats->wr_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
-        if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+        if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
         {
             GPTLstop("PIO:write_total_adios");
         }
@@ -131,7 +131,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
         if(ierr != PIO_NOERR){
             LOG((1, "PIOc_inq_type failed, ierr = %d", ierr));
             GPTLstop("PIO:write_total");
-            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
             {
                 GPTLstop("PIO:write_total_adios");
             }
@@ -146,7 +146,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
             ierr = PIOc_inq_type_impl(ncid, memtype, NULL, &memtype_len);
             if(ierr != PIO_NOERR){
                 GPTLstop("PIO:write_total");
-                if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+                if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
                 {
                     GPTLstop("PIO:write_total_adios");
                 }
@@ -177,7 +177,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
             spio_ltimer_stop(ios->io_fstats->tot_timer_name);
             spio_ltimer_stop(file->io_fstats->wr_timer_name);
             spio_ltimer_stop(file->io_fstats->tot_timer_name);
-            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
             {
                 GPTLstop("PIO:write_total_adios");
             }
@@ -193,7 +193,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
             spio_ltimer_stop(ios->io_fstats->tot_timer_name);
             spio_ltimer_stop(file->io_fstats->wr_timer_name);
             spio_ltimer_stop(file->io_fstats->tot_timer_name);
-            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
             {
                 GPTLstop("PIO:write_total_adios");
             }
@@ -206,7 +206,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
             spio_ltimer_stop(ios->io_fstats->tot_timer_name);
             spio_ltimer_stop(file->io_fstats->wr_timer_name);
             spio_ltimer_stop(file->io_fstats->tot_timer_name);
-            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+            if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
             {
                 GPTLstop("PIO:write_total_adios");
             }
@@ -218,7 +218,7 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
 
     /* ADIOS: assume all procs are also IO tasks */
 #ifdef _ADIOS2
-    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC))
+    if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
         LOG((2, "ADIOS define attribute %s, varid %d, type %d", name, varid, atttype));
 
