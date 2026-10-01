@@ -536,18 +536,6 @@ static int initialize_adios2_variables(iosystem_desc_t *ios, file_desc_t *file)
                                convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
             }
 
-            /* The default BP5 marshaling delivers the 1-element string array
-             * attribute /__pio__/var/<v>/def/dims to the reader as an empty
-             * single value (seen with ADIOS2 2.12.1), so use FFS marshaling. */
-            adiosErr = adios2_set_parameter(file->ioH, "MarshalMethod", "FFS");
-            if (adiosErr != adios2_error_none)
-            {
-                GPTLstop("PIO:initialize_adios2_variables");
-                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                               "Setting (ADIOS) SST parameter (MarshalMethod=FFS) failed (adios2_error=%s) for file (%s)",
-                               convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file));
-            }
-
             adiosErr = adios2_set_parameter(file->ioH, "InitialBufferSize", "1Gb");
             if (adiosErr != adios2_error_none)
             {
