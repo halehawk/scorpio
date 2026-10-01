@@ -2639,15 +2639,15 @@ static int PIOc_read_darray_adios(file_desc_t *file, int fndims, io_desc_t *iode
     decomp_info_buff = (const int *) file->cache_darray_info->get(file->cache_darray_info, decomp_name);
     if (decomp_info_buff == NULL)
     {
-      /* SST: decomp info must have been cached during openfile step-0 scan.
-       * Close/reopen is not possible for streaming engines. */
-      if (file->iotype == PIO_IOTYPE_ADIOS_SST)
+      /* SST: a stream cannot be reopened or rewound, so the decomposition map
+       * can only be read from step 0, which openfile leaves open. */
+      if (file->iotype == PIO_IOTYPE_ADIOS_SST &&
+          !(file->engineH != NULL && current_adios_step == 0 && file->begin_step_called == 1))
       {
         return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
                        "Reading variable (%s, varid=%d) from SST stream (%s) failed. "
-                       "Decomposition info for variable not found in cache — "
-                       "ensure the SST openfile metadata scan succeeded",
-                       pio_get_vname_from_file(file, varid), varid, pio_get_fname_from_file(file));
+                       "The decomposition map is not cached and step 0 is no longer open (current step %zu)",
+                       pio_get_vname_from_file(file, varid), varid, pio_get_fname_from_file(file), current_adios_step);
       }
       if (file->store_adios_decomp)
       {
@@ -2699,6 +2699,14 @@ static int PIOc_read_darray_adios(file_desc_t *file, int fndims, io_desc_t *iode
         if (current_adios_step == 0 && file->begin_step_called == 1)
         {
             decomp_adios_var = adios2_inquire_variable(file->ioH, decomp_name);
+            if (decomp_adios_var == NULL && file->iotype == PIO_IOTYPE_ADIOS_SST)
+            {
+                /* Ending step 0 to search later steps would lose it for SST */
+                return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Reading variable (%s, varid=%d) from SST stream (%s) failed. "
+                               "Decomposition map %s not found in step 0",
+                               pio_get_vname_from_file(file, varid), varid, pio_get_fname_from_file(file), decomp_name);
+            }
             if (decomp_adios_var == NULL)
             {
                 adiosErr = adios2_end_step(file->engineH);
