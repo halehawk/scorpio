@@ -26,7 +26,7 @@ static int check_var(int ncid, const char *name, nc_type exp_type, int exp_ndims
     ERR(ret);
     nc_type xtype;
     int ndims;
-    ret = PIOc_inq_var(ncid, *varidp, NULL, &xtype, &ndims, NULL, NULL);
+    ret = PIOc_inq_var(ncid, *varidp, NULL, 0, &xtype, &ndims, NULL, NULL);
     ERR(ret);
     if (xtype != exp_type || ndims != exp_ndims)
     {
