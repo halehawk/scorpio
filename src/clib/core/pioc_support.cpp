@@ -3833,29 +3833,45 @@ char const adios_pio_global_prefix[] = "/__pio__/global/";
 char const adios_pio_track_frame_id_prefix[] = "/__pio__/track/frame_id/";
 char const adios_pio_decomp_prefix[] = "/__pio__/decomp/";
 
-/* SST delivers a 1-element string-array attribute such as /def/dims to the
- * reader as an empty single value (seen with ADIOS2 2.12.1, with both BP5 and
- * FFS marshaling), while single-string attributes arrive intact. So for SST
- * each dimension name is also stored as /__pio__/var/<var>/def/dims/<i>. */
-static void sst_dim_attr_name(char *att_name, const char *var_name, int i)
+/* ADIOS2's SstWriter::MarshalAttributes leaves string-array attributes such as
+ * /def/dims unhandled, so the SST reader gets an empty single value (ADIOS2
+ * 2.12.x). For SST each dimension name is therefore also written as a scalar
+ * string variable /__pio__/sst/vardims/<var>/<i>. The prefix keeps these out of
+ * /__pio__/var/, which the reader treats as NetCDF variables. */
+char const adios_pio_sst_vardims_prefix[] = "/__pio__/sst/vardims/";
+
+static void sst_dim_var_name(char *name, const char *var_name, int i)
 {
-    snprintf(att_name, PIO_MAX_NAME, "%s%s%s/%d", adios_pio_var_prefix, var_name, adios_def_dims_suffix, i);
+    snprintf(name, PIO_MAX_NAME, "%s%s/%d", adios_pio_sst_vardims_prefix, var_name, i);
 }
 
-int spio_define_adios2_sst_dim_attrs(iosystem_desc_t *ios, file_desc_t *file, const char *var_name,
-                                     char *const *dimnames, int ndims)
+/* Must be called inside an open writer step; the variables only exist in that step. */
+int spio_put_adios2_sst_dim_vars(iosystem_desc_t *ios, file_desc_t *file, const char *var_name,
+                                 char *const *dimnames, int ndims)
 {
-    char att_name[PIO_MAX_NAME];
+    char name[PIO_MAX_NAME];
     for (int i = 0; i < ndims; i++)
     {
-        sst_dim_attr_name(att_name, var_name, i);
-        if (adios2_inquire_attribute(file->ioH, att_name) != NULL)
-            continue;
-        if (adios2_define_attribute(file->ioH, att_name, adios2_type_string, dimnames[i]) == NULL)
+        sst_dim_var_name(name, var_name, i);
+        adios2_variable *variableH = adios2_inquire_variable(file->ioH, name);
+        if (variableH == NULL)
+        {
+            variableH = spio_define_adios2_variable(ios, file, file->ioH, name, adios2_type_string,
+                                                    0, NULL, NULL, NULL, adios2_constant_dims_true);
+            if (variableH == NULL)
+            {
+                return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
+                               "Defining (ADIOS) variable (name=%s) failed for SST stream (%s, ncid=%d)",
+                               name, pio_get_fname_from_file(file), file->pio_ncid);
+            }
+        }
+
+        adios2_error adiosErr = adios2_put(file->engineH, variableH, dimnames[i], adios2_mode_sync);
+        if (adiosErr != adios2_error_none)
         {
             return pio_err(ios, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
-                           "Defining (ADIOS) attribute (name=%s) failed for SST stream (%s, ncid=%d)",
-                           att_name, pio_get_fname_from_file(file), file->pio_ncid);
+                           "Putting (ADIOS) variable (name=%s) failed (adios2_error=%s) for SST stream (%s, ncid=%d)",
+                           name, convert_adios2_error_to_string(adiosErr), pio_get_fname_from_file(file), file->pio_ncid);
         }
     }
     return PIO_NOERR;
@@ -4103,8 +4119,9 @@ static int adios_get_attr(file_desc_t *file, int attr_id, char *const *attr_name
     return 0;
 }
 
-/* SST: read dimension IDs from the per-dimension single-string attributes
- * /__pio__/var/<var>/def/dims/<i> (see spio_define_adios2_sst_dim_attrs). */
+/* SST: read dimension IDs from the per-dimension scalar string variables
+ * /__pio__/sst/vardims/<var>/<i> (see spio_put_adios2_sst_dim_vars). Must be
+ * called while the step they were written in (step 0) is open. */
 static int adios_get_sst_dim_ids(file_desc_t *file, int varid)
 {
     adios_var_desc_t *av = &(file->adios_vars[varid]);
@@ -4123,29 +4140,29 @@ static int adios_get_sst_dim_ids(file_desc_t *file, int varid)
         }
     }
 
-    char att_name[PIO_MAX_NAME];
-    char dim_name[PIO_MAX_NAME + 1];
+    char name[PIO_MAX_NAME];
+    /* adios2_get copies a string value without a terminating '\0', so zero the buffer first */
+    char dim_name[adios2_string_array_element_max_size + 1];
     for (int i = 0; i < av->ndims; i++)
     {
-        sst_dim_attr_name(att_name, av->name, i);
-        adios2_attribute *attr = adios2_inquire_attribute(file->ioH, att_name);
-        if (attr == NULL)
+        sst_dim_var_name(name, av->name, i);
+        adios2_variable *variableH = adios2_inquire_variable(file->ioH, name);
+        if (variableH == NULL)
         {
             return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
                            "Getting dimension IDs for variable (%s, varid = %d) in SST stream (%s, ncid=%d) failed. "
-                           "Attribute %s not found",
-                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, att_name);
+                           "Variable %s not found",
+                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, name);
         }
 
         memset(dim_name, 0, sizeof(dim_name));
-        size_t size_attr = 0;
-        adios2_error adiosErr = adios2_attribute_data(dim_name, &size_attr, attr);
+        adios2_error adiosErr = adios2_get(file->engineH, variableH, dim_name, adios2_mode_sync);
         if (adiosErr != adios2_error_none)
         {
             return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
                            "Getting dimension IDs for variable (%s, varid = %d) in SST stream (%s, ncid=%d) failed. "
-                           "The low level (ADIOS) I/O library call failed to retrieve attribute %s (adios2_error=%s)",
-                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, att_name,
+                           "The low level (ADIOS) I/O library call failed to get variable %s (adios2_error=%s)",
+                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, name,
                            convert_adios2_error_to_string(adiosErr));
         }
 
@@ -4154,8 +4171,8 @@ static int adios_get_sst_dim_ids(file_desc_t *file, int varid)
         {
             return pio_err(NULL, file, PIO_EADIOS2ERR, __FILE__, __LINE__,
                            "Getting dimension IDs for variable (%s, varid = %d) in SST stream (%s, ncid=%d) failed. "
-                           "Cannot determine ID for dimension \"%s\" (from attribute %s)",
-                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, dim_name, att_name);
+                           "Cannot determine ID for dimension \"%s\" (from variable %s)",
+                           av->name, varid, pio_get_fname_from_file(file), file->pio_ncid, dim_name, name);
         }
         av->gdimids[i] = gdimid;
     }

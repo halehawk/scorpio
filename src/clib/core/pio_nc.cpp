@@ -3776,7 +3776,7 @@ int PIOc_def_var_impl(int ncid, const char *name, nc_type xtype, int ndims,
 
                     if (file->iotype == PIO_IOTYPE_ADIOS_SST)
                     {
-                        ierr = spio_define_adios2_sst_dim_attrs(ios, file, av->name, dimnames, av->ndims);
+                        ierr = spio_put_adios2_sst_dim_vars(ios, file, av->name, dimnames, av->ndims);
                         if (ierr != PIO_NOERR)
                             return ierr;
                     }
