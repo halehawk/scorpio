@@ -41,6 +41,21 @@ add_test(NAME sst_endtoend
 set_tests_properties(sst_endtoend PROPERTIES
     TIMEOUT ${DEFAULT_SST_TEST_TIMEOUT})
 
+#===== Several variables (1-D/2-D decompositions, record dim) over 10 frames =====
+add_spio_executable(pio_sst_multivar_writer TRUE C
+    ${CMAKE_CURRENT_SOURCE_DIR}/pio_sst_multivar_writer.c)
+add_dependencies(tests pio_sst_multivar_writer)
+
+add_spio_executable(pio_sst_multivar_reader TRUE C
+    ${CMAKE_CURRENT_SOURCE_DIR}/pio_sst_multivar_reader.c)
+add_dependencies(tests pio_sst_multivar_reader)
+
+add_test(NAME sst_multivar
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/run_sst_c_paired.sh
+            pio_sst_multivar_writer pio_sst_multivar_reader)
+set_tests_properties(sst_multivar PROPERTIES
+    TIMEOUT ${DEFAULT_SST_TEST_TIMEOUT})
+
 #===== Same writer/reader on an ADIOS BP file (no SST) =====
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/run_sst_c_bp_readback.sh.in

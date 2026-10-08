@@ -8,8 +8,9 @@
 # Using two separate mpirun invocations avoids MPMD complexity and keeps
 # each process in its own MPI universe, compatible with WAN/TCP transport.
 
-WRITER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_writer"
-READER="@CMAKE_CURRENT_BINARY_DIR@/pio_sst_reader"
+# Optional args: writer and reader executable names (default: the basic SST test)
+WRITER="@CMAKE_CURRENT_BINARY_DIR@/${1:-pio_sst_writer}"
+READER="@CMAKE_CURRENT_BINARY_DIR@/${2:-pio_sst_reader}"
 MPIEXEC="@MPIEXEC@"
 NUMPROC="@MPIEXEC_NUMPROC_FLAG@"
 PREFLAGS="@MPIEXEC_PREFLAGS@"
