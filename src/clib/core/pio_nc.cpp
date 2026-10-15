@@ -359,7 +359,7 @@ int PIOc_inq_unlimdims_impl(int ncid, int *nunlimdimsp, int *unlimdimidsp)
 {
     iosystem_desc_t *ios;  /* Pointer to io system information. */
     file_desc_t *file;     /* Pointer to file information. */
-    int tmp_nunlimdims;    /* The number of unlimited dims. */
+    int tmp_nunlimdims = 0; /* The number of unlimited dims. */
     int ierr = PIO_NOERR;              /* Return code from function calls. */
     int mpierr = MPI_SUCCESS;  /* Return code from MPI function calls. */
 
@@ -463,7 +463,19 @@ int PIOc_inq_unlimdims_impl(int ncid, int *nunlimdimsp, int *unlimdimidsp)
 #ifdef _ADIOS2
     if ((file->iotype == PIO_IOTYPE_ADIOS) || (file->iotype == PIO_IOTYPE_ADIOSC) || (file->iotype == PIO_IOTYPE_ADIOS_SST))
     {
-        LOG((2, "ADIOS missing %s:%s", __FILE__, __func__));
+        /* def_dim records unlimited dimensions with length PIO_UNLIMITED */
+        tmp_nunlimdims = 0;
+        for (int i = 0; i < file->num_dim_vars; i++)
+        {
+            if (file->dim_values[i] == PIO_UNLIMITED)
+            {
+                if (unlimdimidsp)
+                    unlimdimidsp[tmp_nunlimdims] = i;
+                tmp_nunlimdims++;
+            }
+        }
+        if (nunlimdimsp)
+            *nunlimdimsp = tmp_nunlimdims;
         ierr = PIO_NOERR;
     }
 #endif
