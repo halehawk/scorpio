@@ -10,9 +10,7 @@
  *   pres(time, y, x)  PIO_INT,    2-D decomposition over (y, x)
  * Each rank owns ELEMENTS_PER_PE consecutive x columns (all y rows).
  */
-#include "pio.h"
 #include <mpi.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "pio_sst_multivar.h"
 
@@ -77,8 +75,15 @@ int main(int argc, char **argv)
     ret = PIOc_enddef(ncid);
     ERR(ret);
 
+    /* Inquire dimensions/variables while writing, as a model would */
+    if (mv_check_structure(ncid, nx, "writer after enddef") != 0)
+        MPI_Abort(MPI_COMM_WORLD, 1);
+
     for (int f = 0; f < NFRAMES; f++)
     {
+        if (f == NFRAMES / 2 && mv_check_structure(ncid, nx, "writer mid-stream") != 0)
+            MPI_Abort(MPI_COMM_WORLD, 1);
+
         double temp[ELEMENTS_PER_PE], salt[ELEMENTS_PER_PE];
         int pres[NY * ELEMENTS_PER_PE];
         for (int i = 0; i < ELEMENTS_PER_PE; i++)

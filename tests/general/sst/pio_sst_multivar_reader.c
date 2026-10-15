@@ -4,12 +4,10 @@
  * ADIOS2 SST streaming test with several variables and frames — C reader.
  * Paired with pio_sst_multivar_writer; see that file for the data layout.
  *
- * Checks each variable's type and number of dimensions, then reads every
- * frame of every variable and verifies all values.
+ * Checks the dimensions and variables through the PIO inquiry API, then reads
+ * every frame of every variable and verifies all values.
  */
-#include "pio.h"
 #include <mpi.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "pio_sst_multivar.h"
 
@@ -19,23 +17,6 @@
         MPI_Abort(MPI_COMM_WORLD, (ret)); \
     } \
 } while(0)
-
-static int check_var(int ncid, const char *name, nc_type exp_type, int exp_ndims, int *varidp)
-{
-    int ret = PIOc_inq_varid(ncid, name, varidp);
-    ERR(ret);
-    nc_type xtype;
-    int ndims;
-    ret = PIOc_inq_var(ncid, *varidp, NULL, 0, &xtype, &ndims, NULL, NULL);
-    ERR(ret);
-    if (xtype != exp_type || ndims != exp_ndims)
-    {
-        fprintf(stderr, "Variable %s: got type %d ndims %d, expected type %d ndims %d\n",
-                name, (int)xtype, ndims, (int)exp_type, exp_ndims);
-        return 1;
-    }
-    return 0;
-}
 
 int main(int argc, char **argv)
 {
@@ -76,11 +57,14 @@ int main(int argc, char **argv)
     ret = PIOc_openfile(iosysid, &ncid, &iotype, stream_name, PIO_NOWRITE);
     ERR(ret);
 
-    int errors = 0;
+    int errors = mv_check_structure(ncid, nx, "reader");
+    if (errors != 0)
+        MPI_Abort(MPI_COMM_WORLD, 1);
+
     int varid_temp, varid_salt, varid_pres;
-    errors += check_var(ncid, "temp", PIO_DOUBLE, 2, &varid_temp);
-    errors += check_var(ncid, "salt", PIO_DOUBLE, 2, &varid_salt);
-    errors += check_var(ncid, "pres", PIO_INT, 3, &varid_pres);
+    ret = PIOc_inq_varid(ncid, "temp", &varid_temp); ERR(ret);
+    ret = PIOc_inq_varid(ncid, "salt", &varid_salt); ERR(ret);
+    ret = PIOc_inq_varid(ncid, "pres", &varid_pres); ERR(ret);
 
     for (int f = 0; f < NFRAMES; f++)
     {
