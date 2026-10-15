@@ -67,6 +67,7 @@ jobs:
             conda-forge::mpich-mpicc \
             conda-forge::mpich-mpicxx \
             conda-forge::mpich-mpifort \
+            "conda-forge::gfortran_linux-64=14.*" \
             conda-forge::libpnetcdf \
             "conda-forge::adios2=*=mpi_mpich_*"
 
@@ -102,7 +103,8 @@ jobs:
               -DPIO_ENABLE_EXAMPLES:BOOL=ON \
               -DPIO_ENABLE_TESTS:BOOL=ON \
               -DPLATFORM:STRING=linux-gnu \
-              -S . -B scorpio_build_dir -LH
+              -S . -B scorpio_build_dir -LH \
+          || { tail -n 150 scorpio_build_dir/CMakeFiles/CMakeConfigureLog.yaml; exit 1; }
 
       - name: Build SCORPIO
         shell: bash -l {0}
