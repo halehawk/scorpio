@@ -98,4 +98,99 @@ static int mv_check_structure(int ncid, int nx, const char *who)
     return errors;
 }
 
+#define MV_TITLE "SCORPIO SST multivar test"
+
+/* Writer, define mode: attributes, fill settings, and rename/delete calls.
+ * Renames use the same name so the expected structure stays the same for
+ * every iotype (ADIOS iotypes do not support renaming). */
+static int mv_define_extras(int ncid, int dimid_x, int varid_temp, int varid_pres, const char *who)
+{
+    int errors = 0, ret;
+    const int valid_range[2] = {0, 1000000};
+
+    /* "title" first, so it is attribute 0 of PIO_GLOBAL for every iotype */
+    ret = PIOc_put_att_text(ncid, PIO_GLOBAL, "title", strlen(MV_TITLE), MV_TITLE);
+    MV_CHECK(ret == PIO_NOERR, "put_att title failed (%d)", ret);
+    ret = PIOc_put_att_text(ncid, varid_temp, "units", 1, "K");
+    MV_CHECK(ret == PIO_NOERR, "put_att temp:units failed (%d)", ret);
+    ret = PIOc_put_att_int(ncid, varid_pres, "valid_range", PIO_INT, 2, valid_range);
+    MV_CHECK(ret == PIO_NOERR, "put_att pres:valid_range failed (%d)", ret);
+
+    /* PIOc_createfile sets NOFILL, so that is the old mode */
+    int old_mode = -1;
+    ret = PIOc_set_fill(ncid, PIO_NOFILL, &old_mode);
+    MV_CHECK(ret == PIO_NOERR && old_mode == PIO_NOFILL, "set_fill: old mode %d (ret %d), expected %d",
+             old_mode, ret, PIO_NOFILL);
+    ret = PIOc_def_var_fill(ncid, varid_temp, PIO_NOFILL, NULL);
+    MV_CHECK(ret == PIO_NOERR, "def_var_fill failed (%d)", ret);
+
+    ret = PIOc_rename_dim(ncid, dimid_x, "x");
+    MV_CHECK(ret == PIO_NOERR, "rename_dim failed (%d)", ret);
+    ret = PIOc_rename_var(ncid, varid_temp, "temp");
+    MV_CHECK(ret == PIO_NOERR, "rename_var failed (%d)", ret);
+    ret = PIOc_rename_att(ncid, varid_temp, "units", "units");
+    MV_CHECK(ret == PIO_NOERR, "rename_att failed (%d)", ret);
+    ret = PIOc_put_att_text(ncid, PIO_GLOBAL, "scratch", 1, "s");
+    MV_CHECK(ret == PIO_NOERR, "put_att scratch failed (%d)", ret);
+    ret = PIOc_del_att(ncid, PIO_GLOBAL, "scratch");
+    MV_CHECK(ret == PIO_NOERR, "del_att failed (%d)", ret);
+
+    return errors;
+}
+
+/* Format, unlimited dimensions, variable fill and, when check_attrs is set,
+ * the attributes from mv_define_extras. Returns the number of mismatches. */
+static int mv_check_extras(int ncid, int check_attrs, const char *who)
+{
+    int errors = 0, ret;
+
+    int format = -1;
+    ret = PIOc_inq_format(ncid, &format);
+    MV_CHECK(ret == PIO_NOERR && format == 1, "inq_format = %d (ret %d), expected 1 (as for the ADIOS iotype)",
+             format, ret);
+
+    int nunlimdims = -1, unlimdimids[PIO_MAX_DIMS];
+    ret = PIOc_inq_unlimdims(ncid, &nunlimdims, unlimdimids);
+    MV_CHECK(ret == PIO_NOERR, "inq_unlimdims failed (%d)", ret);
+
+    int varid_temp = -1, no_fill = -1;
+    ret = PIOc_inq_varid(ncid, "temp", &varid_temp);
+    MV_CHECK(ret == PIO_NOERR, "inq_varid(temp) failed (%d)", ret);
+    ret = PIOc_inq_var_fill(ncid, varid_temp, &no_fill, NULL);
+    MV_CHECK(ret == PIO_NOERR, "inq_var_fill failed (%d)", ret);
+
+    if (!check_attrs)
+        return errors;
+
+    int varid_pres = -1;
+    ret = PIOc_inq_varid(ncid, "pres", &varid_pres);
+    MV_CHECK(ret == PIO_NOERR, "inq_varid(pres) failed (%d)", ret);
+
+    struct { int varid; const char *name; nc_type type; PIO_Offset len; } atts[3] = {
+        {PIO_GLOBAL, "title",       PIO_CHAR, (PIO_Offset)strlen(MV_TITLE)},
+        {varid_temp, "units",       PIO_CHAR, 1},
+        {varid_pres, "valid_range", PIO_INT,  2},
+    };
+    for (int a = 0; a < 3; a++)
+    {
+        nc_type xtype = PIO_NAT;
+        PIO_Offset len = -1;
+        ret = PIOc_inq_att(ncid, atts[a].varid, atts[a].name, &xtype, &len);
+        MV_CHECK(ret == PIO_NOERR && xtype == atts[a].type && len == atts[a].len,
+                 "inq_att(%s): type %d len %lld (ret %d), expected type %d len %lld", atts[a].name,
+                 (int)xtype, (long long)len, ret, (int)atts[a].type, (long long)atts[a].len);
+    }
+
+    int attid = -1;
+    ret = PIOc_inq_attid(ncid, PIO_GLOBAL, "title", &attid);
+    MV_CHECK(ret == PIO_NOERR && attid == 0, "inq_attid(title) = %d (ret %d), expected 0", attid, ret);
+
+    char attname[PIO_MAX_NAME + 1] = {0};
+    ret = PIOc_inq_attname(ncid, PIO_GLOBAL, 0, attname);
+    MV_CHECK(ret == PIO_NOERR && strcmp(attname, "title") == 0,
+             "inq_attname(global, 0) = \"%s\" (ret %d), expected \"title\"", attname, ret);
+
+    return errors;
+}
+
 #endif

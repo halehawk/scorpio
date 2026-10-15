@@ -57,7 +57,8 @@ int main(int argc, char **argv)
     ret = PIOc_openfile(iosysid, &ncid, &iotype, stream_name, PIO_NOWRITE);
     ERR(ret);
 
-    int errors = mv_check_structure(ncid, nx, "reader");
+    /* Attributes are not checked here: the SST reader does not load them yet */
+    int errors = mv_check_structure(ncid, nx, "reader") + mv_check_extras(ncid, 0, "reader");
     if (errors != 0)
         MPI_Abort(MPI_COMM_WORLD, 1);
 

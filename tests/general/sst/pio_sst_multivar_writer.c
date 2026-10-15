@@ -72,16 +72,21 @@ int main(int argc, char **argv)
     ret = PIOc_def_var(ncid, "temp", PIO_DOUBLE, 2, dims_tx, &varid_temp);  ERR(ret);
     ret = PIOc_def_var(ncid, "salt", PIO_DOUBLE, 2, dims_tx, &varid_salt);  ERR(ret);
     ret = PIOc_def_var(ncid, "pres", PIO_INT, 3, dims_tyx, &varid_pres);    ERR(ret);
+    if (mv_define_extras(ncid, dimid_x, varid_temp, varid_pres, "writer define mode") != 0)
+        MPI_Abort(MPI_COMM_WORLD, 1);
     ret = PIOc_enddef(ncid);
     ERR(ret);
 
-    /* Inquire dimensions/variables while writing, as a model would */
-    if (mv_check_structure(ncid, nx, "writer after enddef") != 0)
+    /* Inquire dimensions, variables and attributes while writing, as a model would */
+    if (mv_check_structure(ncid, nx, "writer after enddef") != 0 ||
+        mv_check_extras(ncid, 1, "writer after enddef") != 0)
         MPI_Abort(MPI_COMM_WORLD, 1);
 
     for (int f = 0; f < NFRAMES; f++)
     {
-        if (f == NFRAMES / 2 && mv_check_structure(ncid, nx, "writer mid-stream") != 0)
+        if (f == NFRAMES / 2 &&
+            (mv_check_structure(ncid, nx, "writer mid-stream") != 0 ||
+             mv_check_extras(ncid, 1, "writer mid-stream") != 0))
             MPI_Abort(MPI_COMM_WORLD, 1);
 
         double temp[ELEMENTS_PER_PE], salt[ELEMENTS_PER_PE];
