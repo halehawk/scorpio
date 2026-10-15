@@ -138,6 +138,8 @@ static int mv_define_extras(int ncid, int dimid_x, int varid_temp, int varid_pre
     return errors;
 }
 
+static int mv_check_attrs(int ncid, int varid_temp, const char *who);
+
 /* Format, unlimited dimensions, variable fill and, when check_attrs is set,
  * the attributes from mv_define_extras. Returns the number of mismatches. */
 static int mv_check_extras(int ncid, int check_attrs, const char *who)
@@ -149,19 +151,32 @@ static int mv_check_extras(int ncid, int check_attrs, const char *who)
     MV_CHECK(ret == PIO_NOERR && format == 1, "inq_format = %d (ret %d), expected 1 (as for the ADIOS iotype)",
              format, ret);
 
-    int nunlimdims = -1, unlimdimids[PIO_MAX_DIMS];
-    ret = PIOc_inq_unlimdims(ncid, &nunlimdims, unlimdimids);
-    MV_CHECK(ret == PIO_NOERR, "inq_unlimdims failed (%d)", ret);
-
     int varid_temp = -1, no_fill = -1;
     ret = PIOc_inq_varid(ncid, "temp", &varid_temp);
     MV_CHECK(ret == PIO_NOERR, "inq_varid(temp) failed (%d)", ret);
     ret = PIOc_inq_var_fill(ncid, varid_temp, &no_fill, NULL);
     MV_CHECK(ret == PIO_NOERR, "inq_var_fill failed (%d)", ret);
 
-    if (!check_attrs)
-        return errors;
+    if (check_attrs)
+        errors += mv_check_attrs(ncid, varid_temp, who);
 
+    /* Last, so a regression here cannot hide the checks above */
+    int nunlimdims = -1, unlimdimids[PIO_MAX_DIMS], dimid_time = -2;
+    for (int d = 0; d < PIO_MAX_DIMS; d++)
+        unlimdimids[d] = -1;
+    PIOc_inq_dimid(ncid, "time", &dimid_time);
+    ret = PIOc_inq_unlimdims(ncid, &nunlimdims, unlimdimids);
+    MV_CHECK(ret == PIO_NOERR && nunlimdims == 1 && unlimdimids[0] == dimid_time,
+             "inq_unlimdims: %d dims, first %d (ret %d), expected 1 dim, %d (time)",
+             nunlimdims, unlimdimids[0], ret, dimid_time);
+
+    return errors;
+}
+
+/* The attributes defined by mv_define_extras. Returns the number of mismatches. */
+static int mv_check_attrs(int ncid, int varid_temp, const char *who)
+{
+    int errors = 0, ret;
     int varid_pres = -1;
     ret = PIOc_inq_varid(ncid, "pres", &varid_pres);
     MV_CHECK(ret == PIO_NOERR, "inq_varid(pres) failed (%d)", ret);
