@@ -74,6 +74,7 @@ class SpioFile:
 
     def __init__(self, path):
         self.path = self._bp_path(path)
+        self._steps_of = self._scan_steps(self.path)
         self._f = adios2.FileReader(self.path)
         self._nsteps = self._f.num_steps()
         self._avail_vars = self._f.available_variables()
@@ -119,30 +120,44 @@ class SpioFile:
         self.close()
 
     # ------------------------------------------------------------------ low-level ADIOS reads
+    #
+    # In random-access mode, ADIOS2 numbers a variable's steps relative to the
+    # steps that contain it, both in read(step_selection=...) and in blocks_info.
+    # Data and tracking variables of one write must be matched by file step, so
+    # a streaming pass over the metadata first records which file steps contain
+    # each variable. Below, "step" always means a file step.
+    @staticmethod
+    def _scan_steps(path):
+        steps_of = {}
+        with adios2.Stream(path, "r") as stream:
+            for _ in stream.steps():
+                step = stream.current_step()
+                for name in stream.available_variables():
+                    steps_of.setdefault(name, []).append(step)
+        return steps_of
+
     def _has_var(self, name):
         return name in self._avail_vars
 
+    def _var_step(self, name, step):
+        """The variable's own step number for a file step."""
+        return self._steps_of[name].index(step)
+
     def _block_counts(self, name):
-        """Per file step, the element count of each block of a local array."""
+        """{file step: element count of each block} for a variable."""
         if name not in self._blocks_info:
-            counts = []
-            for step_blocks in self._f.all_blocks_info(name):
+            counts = {}
+            for rel, step in enumerate(self._steps_of.get(name, [])):
                 step_counts = []
-                for block in step_blocks:
+                for block in self._f.engine.blocks_info(name, rel):
                     dims = [int(c) for c in str(block.get("Count", "0")).split(",") if c.strip()]
                     step_counts.append(int(np.prod(dims)) if dims else 1)
-                counts.append(step_counts)
-            counts += [[] for _ in range(self._nsteps - len(counts))]
+                counts[step] = step_counts
             self._blocks_info[name] = counts
         return self._blocks_info[name]
 
     def _nblocks(self, name, step):
-        return len(self._block_counts(name)[step]) if self._has_var(name) else 0
-
-    def _var_step(self, name, step):
-        """read()'s step_selection counts only the steps that contain the
-        variable, while all_blocks_info() is indexed by file step."""
-        return sum(1 for s in range(step) if self._nblocks(name, s) > 0)
+        return len(self._block_counts(name).get(step, [])) if self._has_var(name) else 0
 
     def _read_block(self, name, step, block):
         sel = [self._var_step(name, step), 1]
