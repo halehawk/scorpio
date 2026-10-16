@@ -139,8 +139,14 @@ class SpioFile:
     def _nblocks(self, name, step):
         return len(self._block_counts(name)[step]) if self._has_var(name) else 0
 
+    def _var_step(self, name, step):
+        """read()'s step_selection counts only the steps that contain the
+        variable, while all_blocks_info() is indexed by file step."""
+        return sum(1 for s in range(step) if self._nblocks(name, s) > 0)
+
     def _read_block(self, name, step, block):
-        return np.asarray(self._f.read(name, block_id=block, step_selection=[step, 1])).ravel()
+        sel = [self._var_step(name, step), 1]
+        return np.asarray(self._f.read(name, block_id=block, step_selection=sel)).ravel()
 
     def _read_step_blocks(self, name, step):
         return [self._read_block(name, step, b) for b in range(self._nblocks(name, step))]
@@ -157,10 +163,7 @@ class SpioFile:
 
     def _read_value(self, name):
         """A single value written once (e.g. a dimension length)."""
-        step = self._first_step_with_blocks(name)
-        if step is None:
-            step = 0
-        return np.asarray(self._f.read(name, step_selection=[step, 1])).ravel()[0]
+        return np.asarray(self._f.read(name, step_selection=[0, 1])).ravel()[0]
 
     def _attr(self, name, default=None):
         if name not in self._avail_attrs:
