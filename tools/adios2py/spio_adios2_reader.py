@@ -143,21 +143,28 @@ class SpioFile:
         """The variable's own step number for a file step."""
         return self._steps_of[name].index(step)
 
-    def _block_counts(self, name):
-        """{file step: element count of each block} for a variable."""
-        if name not in self._blocks_info:
-            counts = {}
-            for rel, step in enumerate(self._steps_of.get(name, [])):
-                step_counts = []
-                for block in self._f.engine.blocks_info(name, rel):
-                    dims = [int(c) for c in str(block.get("Count", "0")).split(",") if c.strip()]
-                    step_counts.append(int(np.prod(dims)) if dims else 1)
-                counts[step] = step_counts
-            self._blocks_info[name] = counts
-        return self._blocks_info[name]
+    def _count_blocks(self, name, rel):
+        try:
+            return len(self._f.engine.blocks_info(name, rel))
+        except UnicodeDecodeError:
+            # blocks_info formats block min/max as text, which fails for
+            # uint8 variables (SCORPIO's put_var buffers); count by reading.
+            n = 0
+            while True:
+                try:
+                    self._f.read(name, block_id=n, step_selection=[rel, 1])
+                except Exception:
+                    return n
+                n += 1
 
     def _nblocks(self, name, step):
-        return len(self._block_counts(name).get(step, [])) if self._has_var(name) else 0
+        """Number of blocks a variable has in a file step."""
+        if not self._has_var(name):
+            return 0
+        if name not in self._blocks_info:
+            self._blocks_info[name] = {step_: self._count_blocks(name, rel)
+                                       for rel, step_ in enumerate(self._steps_of.get(name, []))}
+        return self._blocks_info[name].get(step, 0)
 
     def _read_block(self, name, step, block):
         sel = [self._var_step(name, step), 1]
@@ -265,7 +272,8 @@ class SpioFile:
         var = self.variables[name]
         data = self._read_darray(var) if var.op == "darray" else self._read_put_var(var)
         if var.nctype == 2:                       # NC_CHAR
-            return np.asarray(data).astype(np.uint8).view("S1")
+            data = np.asarray(data)
+            return data if data.dtype.kind == "S" else data.astype(np.uint8).view("S1")
         return np.asarray(data).astype(var.dtype, copy=False)
 
     def _fill_value(self, var, fill=None):
@@ -394,7 +402,8 @@ class SpioFile:
                 hdr = np.frombuffer(buf[:16 * ndims].tobytes(), dtype=np.int64)
                 start = hdr[:ndims] if hdr[0] >= 0 else None
                 count = hdr[ndims:] if hdr[ndims] >= 0 else None
-                payload = np.frombuffer(buf[16 * ndims:].tobytes(), dtype=raw.dtype)
+                # The block is a uint8 buffer; the data after the header has the NetCDF type
+                payload = np.frombuffer(buf[16 * ndims:].tobytes(), dtype=var.dtype)
                 yield step, start, count, payload
 
     def _read_put_var(self, var):
@@ -402,7 +411,8 @@ class SpioFile:
         if not var.dims:                          # scalar: the last value written
             return blocks[-1][3][:1].reshape(()) if blocks else np.array([], dtype=var.dtype)
         shape = [self.dims[d] for d in var.dims]
-        out = np.full(shape, self._fill_value(var), dtype=blocks[0][3].dtype if blocks else var.dtype)
+        fill = b"\x00" if var.nctype == 2 else self._fill_value(var)
+        out = np.full(shape, fill, dtype=var.dtype)
         record = 0
         for _, start, count, payload in blocks:
             if count is None:                     # whole variable, or one whole record
