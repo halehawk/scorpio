@@ -56,6 +56,11 @@ add_test(NAME sst_multivar
 set_tests_properties(sst_multivar PROPERTIES
     TIMEOUT ${DEFAULT_SST_TEST_TIMEOUT})
 
+#===== BP file for checking tools/adios2py/spio_adios2_reader.py (run from CI) =====
+add_spio_executable(pio_bp_pyreader_writer TRUE C
+    ${CMAKE_CURRENT_SOURCE_DIR}/pio_bp_pyreader_writer.c)
+add_dependencies(tests pio_bp_pyreader_writer)
+
 #===== Same writer/reader on an ADIOS BP file (no SST) =====
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/run_sst_c_bp_readback.sh.in

@@ -98,6 +98,17 @@ class SpioFile:
             return path + ".bp"
         raise FileNotFoundError(f"No ADIOS2 BP directory found for {path!r}")
 
+    @property
+    def adios_steps(self):
+        """Number of ADIOS steps in the file (SCORPIO ends one every
+        PIO_MAX_CACHED_STEPS_FOR_ADIOS frame changes)."""
+        return self._nsteps
+
+    @property
+    def block_groups(self):
+        """Writer ranks merged into each ADIOS block, one list per block group."""
+        return [list(group) for group in self._block_list]
+
     def close(self):
         self._f.close()
 

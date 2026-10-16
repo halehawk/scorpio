@@ -143,6 +143,10 @@ jobs:
           SPIO_SST_TEST_IOTYPE=bp mpiexec -n 2 ./pio_sst_multivar_writer spio_py_reader_check
           python "${GITHUB_WORKSPACE}/tests/general/sst/check_spio_adios2_reader.py" spio_py_reader_check 2
           python "${GITHUB_WORKSPACE}/tools/adios2py/spio_adios2_reader.py" spio_py_reader_check -v pres
+          # Block merging, several ADIOS steps, fill values, put_var and char variables
+          mpiexec -n 4 ./pio_bp_pyreader_writer spio_py_reader_paths
+          python "${GITHUB_WORKSPACE}/tests/general/sst/check_spio_adios2_reader_paths.py" spio_py_reader_paths 4
+          python "${GITHUB_WORKSPACE}/tools/adios2py/spio_adios2_reader.py" spio_py_reader_paths -v label p0 mask
 
       - name: Upload test logs on failure
         if: failure()
