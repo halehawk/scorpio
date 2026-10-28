@@ -138,6 +138,7 @@ jobs:
       - name: Check the Python ADIOS2 reader on a SCORPIO BP file
         shell: bash -l {0}
         run: |
+          set -e
           conda activate scorpio_env
           cd scorpio_build_dir/tests/general/sst
           SPIO_SST_TEST_IOTYPE=bp mpiexec -n 2 ./pio_sst_multivar_writer spio_py_reader_check
@@ -147,6 +148,20 @@ jobs:
           mpiexec -n 4 ./pio_bp_pyreader_writer spio_py_reader_paths
           python "${GITHUB_WORKSPACE}/tests/general/sst/check_spio_adios2_reader_paths.py" spio_py_reader_paths 4
           python "${GITHUB_WORKSPACE}/tools/adios2py/spio_adios2_reader.py" spio_py_reader_paths -v label p0 mask
+
+      - name: Read a live SCORPIO SST stream with an MPI Python reader
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cd scorpio_build_dir/tests/general/sst
+          mpiexec -n 2 ./pio_sst_multivar_writer spio_sst_py_stream &
+          WRITER_PID=$!
+          mpiexec -n 2 python "${GITHUB_WORKSPACE}/tests/general/sst/sst_multivar_reader_mpi.py" spio_sst_py_stream
+          READER_EXIT=$?
+          wait $WRITER_PID
+          WRITER_EXIT=$?
+          echo "reader_exit=$READER_EXIT writer_exit=$WRITER_EXIT"
+          test $READER_EXIT -eq 0 -a $WRITER_EXIT -eq 0
 
       - name: Upload test logs on failure
         if: failure()
