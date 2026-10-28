@@ -69,6 +69,7 @@ jobs:
             conda-forge::mpich-mpifort \
             "conda-forge::gfortran_linux-64=14.*" \
             conda-forge::libpnetcdf \
+            conda-forge::zarr \
             "conda-forge::adios2=*=mpi_mpich_*"
 
       - name: Verify dependency versions
@@ -161,6 +162,7 @@ jobs:
           wait $WRITER_PID
           WRITER_EXIT=$?
           echo "reader_exit=$READER_EXIT writer_exit=$WRITER_EXIT"
+          ls zarr_out/ && ls zarr_out/spio_sst_py_stream.000000.zarr/ || true
           test $READER_EXIT -eq 0 -a $WRITER_EXIT -eq 0
 
       - name: Upload test logs on failure

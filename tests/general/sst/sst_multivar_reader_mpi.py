@@ -10,15 +10,24 @@ step every reader rank reads the blocks with SetBlockSelection, places them
 with the decomposition map, and keeps its own slab of x, which it verifies
 against the values in pio_sst_multivar.h.
 
+As in SstReader_mpi.py, the data is written to Zarr, one store per output
+time: OUTDIR/<stream>.<frame>.zarr with arrays temp(x), salt(x), pres(y, x).
+Rank 0 creates the group and arrays (chunked by each rank's slab, gzip, with
+_ARRAY_DIMENSIONS for xarray), all ranks Barrier, then each rank writes its
+slab. At the end rank 0 reopens the stores and verifies them.
+
 Run in the writer's directory (the reader finds it through <stream>.sst):
     mpiexec -n 2 ./pio_sst_multivar_writer STREAM &
-    mpiexec -n 2 python sst_multivar_reader_mpi.py STREAM
+    mpiexec -n 2 python sst_multivar_reader_mpi.py STREAM [OUTDIR]
 """
+import os
 import sys
 
 from mpi4py import MPI
 import numpy as np
 import adios2.bindings as adios2
+import zarr
+from zarr.storage import LocalStore
 
 # Must match pio_sst_multivar.h
 NFRAMES = 10
@@ -42,11 +51,47 @@ def expected(name, frame, y, x):
 
 
 stream_name = sys.argv[1] if len(sys.argv) > 1 else "scorpio_sst_multivar_stream"
+outdir = sys.argv[2] if len(sys.argv) > 2 else "zarr_out"
 
 # MPI
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 nprocs = comm.Get_size()
+
+# Zarr compressor
+zarr_compression_kw = dict(compressors=zarr.codecs.GzipCodec(level=4))
+if rank == 0:
+    os.makedirs(outdir, exist_ok=True)
+
+
+def store_path(frame):
+    return os.path.join(outdir, f"{stream_name}.{frame:06d}.zarr")
+
+
+def slab(nx):
+    """This rank's x range: whole chunks, so no two ranks write the same chunk."""
+    chunk_x = -(-nx // nprocs)
+    x0 = min(nx, rank * chunk_x)
+    return chunk_x, x0, min(nx, x0 + chunk_x)
+
+
+def write_zarr(frame, vname, shape, dims, attrs, mine):
+    """Rank 0 creates the store and array, then every rank writes its slab
+    (all ranks call this in the same order)."""
+    chunk_x, x0, x1 = slab(shape[-1])
+    if rank == 0:
+        grp = zarr.open_group(store=LocalStore(store_path(frame)), mode="a")
+        grp.attrs["frame"] = frame
+        if vname not in grp:
+            arr = grp.create_array(vname, shape=shape, chunks=shape[:-1] + (chunk_x,),
+                                   dtype=mine.dtype, fill_value=0, **zarr_compression_kw)
+            arr.attrs["_ARRAY_DIMENSIONS"] = dims
+            for key, value in attrs.items():
+                arr.attrs[key] = value
+    comm.Barrier()
+    if x1 > x0:
+        grp = zarr.open_group(store=LocalStore(store_path(frame)), mode="a")
+        grp[vname][..., x0:x1] = mine
 
 # ADIOS MPI communicator
 adios = adios2.ADIOS(comm)
@@ -186,8 +231,7 @@ while True:
             glob = glob.reshape(shape)
 
             # This rank's slab of x
-            nx = shape[-1]
-            x0, x1 = rank * nx // nprocs, (rank + 1) * nx // nprocs
+            _, x0, x1 = slab(shape[-1])
             mine = glob[..., x0:x1]
             x = np.arange(x0, x1)
             want = (expected(vname, frame, np.arange(NY)[:, None], x[None, :]) if mine.ndim == 2
@@ -198,6 +242,15 @@ while True:
                               f"first got {mine[tuple(bad[0])]} expected {want[tuple(bad[0])]}")
             frames_seen[vname].add(frame)
             checked += mine.size
+
+            # Write this frame's slab to Zarr, with the variable's NetCDF attributes
+            prefix = PIO + "var/" + vname + "/"
+            vattrs = {}
+            for aname in sstIO.AvailableAttributes():
+                if aname.startswith(prefix) and "/" not in aname[len(prefix):]:
+                    value = get_attr(aname)
+                    vattrs[aname[len(prefix):]] = value.tolist() if isinstance(value, np.ndarray) else value
+            write_zarr(frame, vname, shape, vdims[1:], vattrs, mine)
 
     # Attributes (single-value ones arrive intact over SST)
     if rank == 0 and get_attr(PIO + "global/title") is not None:
@@ -218,6 +271,26 @@ for vname, seen in frames_seen.items():
 if dims.get("y") != NY:
     errors.append(f"dims = {dims}")
 
+# Reopen the Zarr stores and check what is on disk
+comm.Barrier()
+if rank == 0:
+    nx = dims.get("x", 0)
+    x = np.arange(nx)
+    for frame in range(NFRAMES):
+        try:
+            grp = zarr.open_group(store=LocalStore(store_path(frame)), mode="r")
+            for vname, want in (("temp", expected("temp", frame, 0, x)),
+                                ("salt", expected("salt", frame, 0, x)),
+                                ("pres", expected("pres", frame, np.arange(NY)[:, None], x[None, :]))):
+                got = grp[vname][...]
+                if got.shape != want.shape or not np.array_equal(got, want):
+                    errors.append(f"zarr {store_path(frame)}:{vname} does not match")
+            if grp["temp"].attrs.get("units") != "K" or grp["pres"].attrs.get("_ARRAY_DIMENSIONS") != ["y", "x"]:
+                errors.append(f"zarr {store_path(frame)}: attributes {dict(grp['temp'].attrs)}, "
+                              f"{dict(grp['pres'].attrs)}")
+        except Exception as e:                     # missing store or array
+            errors.append(f"zarr {store_path(frame)}: {e!r}")
+
 all_errors = comm.gather(errors, root=0)
 total_checked = comm.reduce(checked, op=MPI.SUM, root=0)
 if rank == 0:
@@ -228,6 +301,7 @@ if rank == 0:
             print("  " + e)
     else:
         print(f"SST Python MPI reader passed: {nprocs} ranks verified {total_checked} values, "
-              f"{NFRAMES} frames x 3 variables, block groups {block_list}")
+              f"{NFRAMES} frames x 3 variables, block groups {block_list}; "
+              f"Zarr stores verified in {outdir}/")
 failed = comm.bcast(bool(rank == 0 and flat), root=0)
 sys.exit(1 if failed else 0)
