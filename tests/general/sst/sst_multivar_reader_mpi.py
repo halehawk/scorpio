@@ -102,7 +102,8 @@ def get_attr(name):
     if attr.Type() == "string":
         value = attr.DataString()
         return value[0] if len(value) == 1 else value
-    return np.asarray(attr.Data())
+    value = np.asarray(attr.Data()).ravel()
+    return value.item() if value.size == 1 else value
 
 
 # --------------------------------------------------------------------------- read the stream
