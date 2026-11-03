@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<adios-config>
+  <!-- With an HDF5 built with the subfiling VFD (H5_HAVE_SUBFILING_VFD),
+       the ADIOS2 HDF5 engine turns subfiling on by itself, unless
+       H5FD_SUBFILING_IOC_PER_NODE=0 is set. -->
+  <io name="HDF5_Subfile_IO">
+    <engine type="HDF5"/>
+  </io>
+</adios-config>
