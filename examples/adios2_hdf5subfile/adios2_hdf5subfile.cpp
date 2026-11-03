@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 
     try {
         // Initialize ADIOS2 by passing the XML file 
-        adios2::ADIOS adios("adios2.xml", MPI_COMM_WORLD);
+        adios2::ADIOS adios("input.xml", MPI_COMM_WORLD);
 
         // Fetch the IO group defined in our XML configuration
         adios2::IO h5_io = adios.DeclareIO("HDF5_Subfile_IO");

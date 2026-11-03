@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adios-config>
+    <io name="HDF5_Subfile_IO">
+        <!-- Route the IO block through the HDF5 backend -->
+        <engine type="HDF5">
+            <!-- Optional tuning parameters (ADIOS2 only reads them inside <engine>) -->
+            <parameter key="H5CollectiveMPIO" value="yes"/>
+        </engine>
+    </io>
+</adios-config>
