@@ -1,9 +1,11 @@
 ---
 #
 # ========== ADIOS2 HDF5 engine + HDF5 subfiling example ============
-# Builds examples/adios2_hdf5subfile (a standalone ADIOS2 program, not SCORPIO)
-# against conda-forge MPICH + parallel HDF5 + ADIOS2, runs it on 4 ranks,
-# and reads the result back with bpls through the ADIOS2 HDF5 engine.
+# Builds examples/adios2_hdf5subfile (a standalone ADIOS2 program, not SCORPIO).
+# conda-forge HDF5 has no subfiling VFD, so HDF5 is built from source with
+# it enabled and ADIOS2 is built against that HDF5 (ADIOS2's HDF5 engine
+# turns subfiling on only when H5_HAVE_SUBFILING_VFD is defined).
+# The example is run on 4 ranks and read back on 4 ranks.
 #
 name: ADIOS2 HDF5 subfiling example
 
@@ -23,6 +25,9 @@ jobs:
       # Some runners have an Azure MANA adapter that UCX fails to initialize,
       # which makes MPI_Init abort; restrict UCX to shared memory and TCP.
       UCX_TLS: self,sm,tcp
+      HDF5_VERSION: 1.14.6
+      ADIOS2_VERSION: 2.12.1
+      DEPS_PREFIX: ${{ github.workspace }}/deps
 
     steps:
       - name: Checkout repository
@@ -35,53 +40,106 @@ jobs:
           channels: conda-forge,defaults
           auto-activate-base: false
 
-      - name: Install dependencies (MPI, parallel HDF5, ADIOS2)
+      - name: Install MPI and build tools
         shell: bash -l {0}
         run: |
           conda create -n h5sub_env
           conda activate h5sub_env
           conda install -y \
             conda-forge::cmake \
+            conda-forge::make \
             conda-forge::cxx-compiler \
             conda-forge::mpich \
+            conda-forge::mpich-mpicc \
             conda-forge::mpich-mpicxx \
-            "conda-forge::hdf5=*=mpi_mpich_*" \
-            "conda-forge::adios2=*=mpi_mpich_*"
+            conda-forge::zlib
+
+      - name: Cache HDF5 and ADIOS2 builds
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DEPS_PREFIX }}
+          key: deps-hdf5-${{ env.HDF5_VERSION }}-subfiling-adios2-${{ env.ADIOS2_VERSION }}-v1
+
+      - name: Build HDF5 with the subfiling VFD
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        shell: bash -l {0}
+        run: |
+          set -e
+          conda activate h5sub_env
+          curl -sSL -o hdf5.tar.gz \
+            "https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5_${HDF5_VERSION}.tar.gz"
+          mkdir hdf5-src && tar xzf hdf5.tar.gz -C hdf5-src --strip-components=1
+          CC=mpicc cmake -S hdf5-src -B hdf5-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${DEPS_PREFIX}" \
+            -DHDF5_ENABLE_PARALLEL=ON \
+            -DHDF5_ENABLE_SUBFILING_VFD=ON \
+            -DHDF5_BUILD_CPP_LIB=OFF \
+            -DHDF5_BUILD_FORTRAN=OFF \
+            -DHDF5_BUILD_JAVA=OFF \
+            -DHDF5_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=OFF
+          cmake --build hdf5-build --parallel $(nproc)
+          cmake --install hdf5-build
+
+      - name: Build ADIOS2 against that HDF5
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        shell: bash -l {0}
+        run: |
+          set -e
+          conda activate h5sub_env
+          curl -sSL -o adios2.tar.gz \
+            "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz"
+          mkdir adios2-src && tar xzf adios2.tar.gz -C adios2-src --strip-components=1
+          CC=mpicc CXX=mpicxx cmake -S adios2-src -B adios2-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${DEPS_PREFIX}" \
+            -DHDF5_ROOT="${DEPS_PREFIX}" \
+            -DADIOS2_USE_MPI=ON \
+            -DADIOS2_USE_HDF5=ON \
+            -DADIOS2_USE_Fortran=OFF \
+            -DADIOS2_USE_Python=OFF \
+            -DADIOS2_USE_SST=OFF \
+            -DADIOS2_USE_Campaign=OFF \
+            -DADIOS2_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=OFF
+          cmake --build adios2-build --parallel $(nproc)
+          cmake --install adios2-build
 
       - name: Show HDF5 and ADIOS2 configuration
         shell: bash -l {0}
         run: |
           conda activate h5sub_env
-          conda list "hdf5|adios2|mpich"
-          echo "=== HDF5 subfiling VFD ==="
-          grep -n "H5_HAVE_SUBFILING_VFD\|H5_HAVE_PARALLEL\b" "${CONDA_PREFIX}/include/H5pubconf.h" || echo "not found"
-          echo "=== ADIOS2 engines ==="
-          bpls -V || true
-          grep -rn "ADIOS2_HAVE_HDF5" "${CONDA_PREFIX}/lib/cmake/adios2/" | head -5 || true
+          grep -n "H5_HAVE_SUBFILING_VFD\|H5_HAVE_PARALLEL\b\|H5_VERSION\b" "${DEPS_PREFIX}/include/H5pubconf.h"
+          grep -rn "set(ADIOS2_HAVE_HDF5\|set(ADIOS2_HAVE_MPI" "${DEPS_PREFIX}"/lib*/cmake/adios2/ | head -5
 
-      - name: Build
+      - name: Build the example
         shell: bash -l {0}
         run: |
           conda activate h5sub_env
           CXX=mpicxx cmake -S examples/adios2_hdf5subfile -B build \
-            -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}"
+            -DCMAKE_PREFIX_PATH="${DEPS_PREFIX};${CONDA_PREFIX}"
           cmake --build build
 
-      - name: Run on 4 ranks
+      - name: Write with 4 ranks
         shell: bash -l {0}
         run: |
           set -e
           conda activate h5sub_env
+          export LD_LIBRARY_PATH="${DEPS_PREFIX}/lib:${DEPS_PREFIX}/lib64:${LD_LIBRARY_PATH}"
           cd build
           mpiexec -n 4 ./adios2_hdf5subfile
           echo "=== Files written ==="
           ls -la
+          # The subfiling VFD writes simulation_output.h5.subfile_* files
+          # next to the stub simulation_output.h5.
+          ls simulation_output.h5.subfile_* >/dev/null
 
-      - name: Read the output back with the ADIOS2 HDF5 engine
+      - name: Read back with 4 ranks
         shell: bash -l {0}
         run: |
-          set -e
           conda activate h5sub_env
+          export LD_LIBRARY_PATH="${DEPS_PREFIX}/lib:${DEPS_PREFIX}/lib64:${LD_LIBRARY_PATH}"
           cd build
-          bpls -E HDF5 -la simulation_output.h5
-          bpls -E HDF5 -d temperature simulation_output.h5 | tail -n 20
+          mpiexec -n 4 ./adios2_hdf5subfile_read
