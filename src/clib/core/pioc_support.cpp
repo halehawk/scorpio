@@ -101,7 +101,6 @@ static std::string spio_get_nczarr_fname(const char *fname)
   }
 
   char dname[PIO_MAX_NAME + 1];
-  char real_dname[PIO_MAX_NAME + 1];
   char bname[PIO_MAX_NAME + 1];
 
   strncpy(dname, fname, PIO_MAX_NAME); dname[PIO_MAX_NAME] = '\0';
@@ -110,11 +109,14 @@ static std::string spio_get_nczarr_fname(const char *fname)
   char *dname_ptr = dirname(dname);
   char *bname_ptr = basename(bname);
 
-  char *real_dname_ptr = realpath(dname_ptr, real_dname);
+  /* Let realpath() allocate the result: a caller-provided buffer must hold
+   * PATH_MAX bytes, and a smaller one aborts with _FORTIFY_SOURCE */
+  char *real_dname_ptr = realpath(dname_ptr, NULL);
   if(real_dname_ptr){
     nczarr_fname =  nczarr_fname_prefix +
                     real_dname_ptr + fname_sep + bname_ptr +
                     nczarr_fname_suffix;
+    free(real_dname_ptr);
   }
 
   return nczarr_fname;
