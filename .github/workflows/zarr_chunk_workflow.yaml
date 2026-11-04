@@ -1,0 +1,107 @@
+---
+#
+# ========== zarr_chunk: Zarr chunkers and the ZarrWrite ADIOS2 plugin ============
+# 1) Serial chunker vs zarr-python
+# 2) MPI chunker vs zarr-python on 1-5 ranks
+# 3) ZarrWrite plugin, serial build: plugin writer check + CTest (Zarr vs BP5)
+# 4) ZarrWrite plugin, MPI build: plugin writer check on 1-4 ranks + CTest
+#
+name: zarr_chunk + ADIOS2 Zarr plugin
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  push:
+    branches:
+      - 'halehawk/**'
+    paths:
+      - 'tools/zarr_chunk/**'
+      - '.github/workflows/zarr_chunk_workflow.yaml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Some runners have an Azure MANA adapter that UCX fails to initialize,
+      # which makes MPI_Init abort; restrict UCX to shared memory and TCP.
+      UCX_TLS: self,sm,tcp
+    defaults:
+      run:
+        shell: bash -l {0}
+        working-directory: tools/zarr_chunk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: '3.12'
+          channels: conda-forge
+          auto-activate-base: false
+
+      - name: Install MPICH, ADIOS2, zarr
+        working-directory: .
+        run: |
+          conda create -y -n zarr_env -c conda-forge --override-channels \
+            python=3.12 cmake make cxx-compiler mpich mpich-mpicxx \
+            "adios2=*=mpi_mpich_*" "zarr>=3" numpy xarray
+          conda activate zarr_env
+          conda list "adios2|zarr|mpich|xarray"
+
+      - name: Serial chunker vs zarr-python
+        run: |
+          set -e
+          conda activate zarr_env
+          ${CXX} -std=c++17 -O2 -Wall -Wextra -Werror zarr_chunk_test.cpp -o zarr_chunk_test
+          ./zarr_chunk_test out_serial
+          python check_zarr_chunk.py out_serial
+
+      - name: MPI chunker vs zarr-python on 1-5 ranks
+        run: |
+          set -e
+          conda activate zarr_env
+          mpicxx -std=c++17 -O2 -Wall -Wextra -Werror zarr_chunk_mpi_test.cpp -o zarr_chunk_mpi_test
+          for n in 1 2 3 4 5; do
+            echo "=== $n ranks"
+            mpiexec -n $n ./zarr_chunk_mpi_test out_mpi_$n
+            python check_zarr_chunk.py out_mpi_$n
+          done
+
+      - name: Plugin, serial build
+        run: |
+          set -e
+          conda activate zarr_env
+          cmake -S adios2_plugin -B build_serial -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}" \
+            -DPython3_EXECUTABLE="$(which python)" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror"
+          cmake --build build_serial
+          ADIOS2_PLUGIN_PATH="${PWD}/build_serial" build_serial/zarr_plugin_writer plugin_serial.zarr
+          python adios2_plugin/check_zarr_plugin.py plugin_serial.zarr
+          cd build_serial && ctest --output-on-failure
+
+      - name: Plugin, MPI build
+        run: |
+          set -e
+          conda activate zarr_env
+          CXX=mpicxx cmake -S adios2_plugin -B build_mpi -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}" \
+            -DZARR_PLUGIN_USE_MPI=ON -DPython3_EXECUTABLE="$(which python)" \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror"
+          cmake --build build_mpi
+          for n in 1 2 3 4; do
+            echo "=== $n ranks"
+            ADIOS2_PLUGIN_PATH="${PWD}/build_mpi" mpiexec -n $n build_mpi/zarr_plugin_writer plugin_mpi_$n.zarr
+            python adios2_plugin/check_zarr_plugin.py plugin_mpi_$n.zarr
+          done
+          cd build_mpi && ctest --output-on-failure
+
+      - name: Upload outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zarr-chunk-outputs
+          path: |
+            tools/zarr_chunk/out_*
+            tools/zarr_chunk/*.zarr
+            tools/zarr_chunk/build_*/test_*
+            tools/zarr_chunk/build_*/Testing/
+          retention-days: 7

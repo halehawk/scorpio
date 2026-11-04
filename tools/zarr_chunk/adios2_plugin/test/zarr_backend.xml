@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- Write IO "Output" as a Zarr v3 store through the ZarrWrite plugin.
+     ADIOS2_PLUGIN_PATH must point to the directory with the plugin library.
+     FileName must be the output name the application passes to Open()
+     (ADIOS2 2.12 does not hand that name to plugins). -->
+<adios-config>
+  <io name="Output">
+    <engine type="Plugin">
+      <parameter key="PluginName"      value="ZarrWrite"/>
+      <parameter key="PluginLibrary"   value="adios2_zarr_plugin"/>
+      <parameter key="FileName"        value="backend_test.zarr"/>
+      <parameter key="ChunkShape.T"    value="2,3,4"/>
+      <parameter key="DimNames.T"      value="lev,lat,lon"/>
+      <parameter key="ChunkShape.ps"   value="4,5"/>
+      <parameter key="DimNames.ps"     value="lat,lon"/>
+      <parameter key="DimNames.mask"   value="lat,lon"/>
+      <parameter key="FillValue.mask"  value="255"/>
+      <parameter key="ChunkShape.flux" value="3"/>
+      <parameter key="DimNames.flux"   value="lon"/>
+      <parameter key="FillValue"       value="nan"/>
+    </engine>
+  </io>
+</adios-config>

@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- The same IO "Output" written with ADIOS2's own BP5 engine. -->
+<adios-config>
+  <io name="Output">
+    <engine type="BP5"/>
+  </io>
+</adios-config>
