@@ -16,6 +16,9 @@ on:  # yamllint disable-line rule:truthy
     paths:
       - 'tests/general/nczarr/**'
       - 'src/clib/core/pioc_support.cpp'
+      - 'src/flib/spio_def_var*.F90'
+      - 'src/flib/spio_inq_var*.F90'
+      - 'src/flib/pio.F90'
       - 'tests/general/CMakeLists.txt'
       - '.github/workflows/spio_nczarr_testing_workflow.yaml'
 

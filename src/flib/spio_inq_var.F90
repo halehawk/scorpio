@@ -26,7 +26,7 @@ MODULE spio_inq_var
   PRIVATE
   PUBLIC :: pio_inq_varid, pio_inq_varname, pio_inq_vartype, pio_inq_varndims,&
             pio_inq_varnatts, pio_inq_vardimid, pio_inq_var_deflate,&
-            pio_inquire_variable
+            pio_inq_var_chunking, pio_inquire_variable
 
 !> @defgroup PIO_inq_varid PIO_inq_varid
 !! @public
@@ -1125,7 +1125,7 @@ CONTAINS
 
     CHARACTER(LEN=PIO_MAX_NAME) :: log_msg
     INTEGER(C_INT) :: cstorage
-    INTEGER(C_INT), DIMENSION(:), ALLOCATABLE :: cchunksizes
+    INTEGER(PIO_OFFSET_F2C_TYPE_KIND), DIMENSION(:), ALLOCATABLE :: cchunksizes
     INTEGER(C_INT) :: ret
     INTEGER :: i
 
@@ -1148,8 +1148,10 @@ CONTAINS
     ierr = PIOc_inq_var_chunking(file%fh, INT(varid, C_INT) - 1, cstorage, cchunksizes)
 
     storage = INT(cstorage)
+    ! C returns the chunk sizes in C order; return them in Fortran order
+    ! (the order pio_def_var_chunking() takes)
     DO i = 1, SIZE(chunksizes)
-      chunksizes(i) = INT(cchunksizes(i))
+      chunksizes(i) = INT(cchunksizes(SIZE(chunksizes) - i + 1))
     END DO
     DEALLOCATE(cchunksizes)
 

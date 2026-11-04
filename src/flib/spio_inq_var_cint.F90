@@ -183,11 +183,12 @@ INTERFACE
   INTEGER(C_INT) FUNCTION PIOc_inq_var_chunking(fh, varid, storage, chunksizes)&
                           bind(C,name="PIOc_inq_var_chunking")
     USE iso_c_binding
+    USE pio_kinds, ONLY : PIO_OFFSET_F2C_TYPE_KIND
 
     INTEGER(C_INT), VALUE :: fh
     INTEGER(C_INT), VALUE :: varid
     INTEGER(C_INT) :: storage
-    INTEGER(C_INT), DIMENSION(*) :: chunksizes
+    INTEGER(PIO_OFFSET_F2C_TYPE_KIND), DIMENSION(*) :: chunksizes
   END FUNCTION PIOc_inq_var_chunking
 END INTERFACE
 

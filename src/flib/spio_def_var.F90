@@ -571,7 +571,7 @@ CONTAINS
 
     CHARACTER(LEN=PIO_MAX_NAME) :: log_msg
     INTEGER :: i, ndims
-    INTEGER(C_INT), DIMENSION(:), ALLOCATABLE :: cchunksizes
+    INTEGER(PIO_OFFSET_F2C_TYPE_KIND), DIMENSION(:), ALLOCATABLE :: cchunksizes
 
 #ifdef TIMING
     CALL t_startf("PIO:pio_def_var_chunking_file_vdesc")
@@ -581,7 +581,7 @@ CONTAINS
     ALLOCATE(cchunksizes(ndims))
 
     DO i=1,ndims
-      cchunksizes(i) = INT(chunksizes(ndims - i + 1), C_INT)
+      cchunksizes(i) = INT(chunksizes(ndims - i + 1), PIO_OFFSET_F2C_TYPE_KIND)
     END DO
 
 #ifndef HAVE_NC4_CHUNK_CONSTS

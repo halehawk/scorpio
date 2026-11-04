@@ -56,7 +56,7 @@ module pio
                             pio_set_var_chunk_cache, pio_get_var_chunk_cache
   use spio_inq_var, only :  pio_inq_varid, pio_inq_varname, pio_inq_vartype, pio_inq_varndims,&
                             pio_inq_varnatts, pio_inq_vardimid, pio_inq_var_deflate,&
-                            pio_inquire_variable
+                            pio_inq_var_chunking, pio_inquire_variable
   use spio_def_dim, only :  pio_def_dim
   use spio_inq_dim, only :  pio_inq_dimid, pio_inq_dimname, pio_inq_dimlen,&
                             pio_inquire_dimension

@@ -45,7 +45,7 @@ program pio_nczarr_f
   real :: ps(LON_PER_PE), psread(LON_PER_PE)
   character(len=PIO_MAX_NAME) :: fname, sval
   integer :: my_rank, nprocs, nlon, iotype, ret, ierr, nerr, nerr_all
-  integer :: dim_lon, dim_lev, dim_time, f, k, i
+  integer :: dim_lon, dim_lev, dim_time, f, k, i, storage, chunks(3)
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, my_rank, ierr)
@@ -139,6 +139,12 @@ program pio_nczarr_f
   call check(pio_inq_varid(file, "lon", vd_lon), "pio_inq_varid lon")
   call check(pio_inq_varid(file, "T", vd_t), "pio_inq_varid T")
   call check(pio_inq_varid(file, "ps", vd_ps), "pio_inq_varid ps")
+
+  ! Chunking round trip, in Fortran order as given to pio_def_var_chunking
+  chunks = -1
+  call check(pio_inq_var_chunking(file, vd_t, storage, chunks), "pio_inq_var_chunking T")
+  call expect(storage == PIO_chunked, "T storage (chunked)")
+  call expect(all(chunks == (/LON_PER_PE, 2, 1/)), "T chunk sizes")
 
   sval = ""
   call check(pio_get_att(file, PIO_global, "title", sval), "pio_get_att title")
