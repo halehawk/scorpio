@@ -8,7 +8,7 @@ compression), and an ADIOS2 engine plugin that writes through it.
 |---|---|
 | `zarr_chunk.hpp` | serial, header only: `chunk_array`, `chunk_blocks`, `write_zarr_v3` |
 | `zarr_chunk_mpi.hpp` | MPI: `chunk_blocks_mpi` / `chunk_array_mpi` assemble each chunk on one owner rank (one `MPI_Alltoallv`), `write_zarr_v3_mpi` |
-| `adios2_plugin/` | `ZarrWrite` ADIOS2 engine plugin (serial by default, `-DZARR_PLUGIN_USE_MPI=ON` for MPI) |
+| `adios2_plugin/` | `ZarrWrite` ADIOS2 engine plugin (serial by default, `-DZARR_PLUGIN_USE_MPI=ON` for MPI); see [adios2_plugin/README.md](adios2_plugin/README.md) for building it and the XML setup |
 
 ## Tests
 
