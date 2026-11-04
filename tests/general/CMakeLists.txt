@@ -805,3 +805,8 @@ add_pio_test(pio_iosystem_tests3
   MINSTRIDE 1
   MAXSTRIDE ${PIO_TF_C1_MAXSTRIDE}
   TIMEOUT ${DEFAULT_TEST_TIMEOUT})
+
+#===== NCZarr (Zarr stores via NetCDF-C) tests =====
+if (PIO_ENABLE_NCZARR AND NetCDF_C_HAS_NCZARR)
+  add_subdirectory(nczarr)
+endif ()
