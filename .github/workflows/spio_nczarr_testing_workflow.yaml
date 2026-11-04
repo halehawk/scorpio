@@ -15,6 +15,7 @@ on:  # yamllint disable-line rule:truthy
       - 'halehawk/**'
     paths:
       - 'tests/general/nczarr/**'
+      - 'src/clib/core/pioc_support.cpp'
       - 'tests/general/CMakeLists.txt'
       - '.github/workflows/spio_nczarr_testing_workflow.yaml'
 
