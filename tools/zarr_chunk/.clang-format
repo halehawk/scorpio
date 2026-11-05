@@ -1,0 +1,14 @@
+# Style of the zarr_chunk headers, plugin and tests
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AccessModifierOffset: -4
+IncludeBlocks: Preserve
+PointerAlignment: Left
+AlwaysBreakTemplateDeclarations: Yes
+SpacesBeforeTrailingComments: 1

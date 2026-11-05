@@ -44,12 +44,10 @@ inline int to_int(size_t n)
 // Assemble the Zarr chunks owned by this rank, from the blocks every rank
 // holds. blocks[i] holds box boxes[i] of the global array in C order.
 template <typename T>
-std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& blocks,
-                                    const std::vector<Box>& boxes,
-                                    const std::vector<size_t>& shape,
-                                    const std::vector<size_t>& chunks, T fill_value,
-                                    bool write_empty_chunks = false,
-                                    KeyEncoding enc = KeyEncoding::V3Default)
+std::vector<Chunk>
+chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& blocks, const std::vector<Box>& boxes,
+                 const std::vector<size_t>& shape, const std::vector<size_t>& chunks, T fill_value,
+                 bool write_empty_chunks = false, KeyEncoding enc = KeyEncoding::V3Default)
 {
     static_assert(std::is_arithmetic_v<T>, "chunk_blocks_mpi needs a numeric type");
     int rank, nprocs;
@@ -89,8 +87,8 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
             mine[k * width + d] = boxes[my[k]].start[d];
             mine[k * width + nd + d] = boxes[my[k]].count[d];
         }
-    MPI_Allgatherv(mine.data(), nmine * width, MPI_UNSIGNED_LONG_LONG, all.data(),
-                   counts.data(), displs.data(), MPI_UNSIGNED_LONG_LONG, comm);
+    MPI_Allgatherv(mine.data(), nmine * width, MPI_UNSIGNED_LONG_LONG, all.data(), counts.data(),
+                   displs.data(), MPI_UNSIGNED_LONG_LONG, comm);
     std::vector<Box> gbox(total);
     std::vector<int> grank(total);
     for (int r = 0, k = 0; r < nprocs; r++)
@@ -128,7 +126,7 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
         Box region;
     };
     std::vector<Piece> pieces;
-    std::map<size_t, std::vector<size_t>> owned;  // linear index -> index
+    std::map<size_t, std::vector<size_t>> owned; // linear index -> index
     for (size_t k = 0; k < my.size(); k++) {
         std::vector<size_t> lo, hi;
         detail::chunk_range(boxes[my[k]], chunks, lo, hi);
@@ -153,8 +151,8 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
     for (const Piece& p : pieces) {
         size_t at = sendbuf.size(), n = box_size(p.region);
         sendbuf.resize(at + n);
-        detail::copy_region(blocks[my[p.block]], boxes[my[p.block]], sendbuf.data() + at,
-                            p.region, p.region);
+        detail::copy_region(blocks[my[p.block]], boxes[my[p.block]], sendbuf.data() + at, p.region,
+                            p.region);
         send_elems[p.owner] += n;
     }
 
@@ -199,7 +197,7 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
 
     std::vector<Chunk> result;
     for (const auto& [linear, index] : owned) {
-        Box cbox;  // the full (unclipped) chunk, as the destination layout
+        Box cbox; // the full (unclipped) chunk, as the destination layout
         cbox.count = chunks;
         cbox.start.resize(nd);
         for (size_t d = 0; d < nd; d++)
@@ -212,9 +210,9 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
             detail::copy_region(recvbuf.data() + rpos[grank[k]], piece, buf.data(), cbox, piece);
             rpos[grank[k]] += box_size(piece);
         }
-        if (!write_empty_chunks &&
-            std::all_of(buf.begin(), buf.end(),
-                        [&](T v) { return detail::same_value(v, fill_value); }))
+        if (!write_empty_chunks && std::all_of(buf.begin(), buf.end(), [&](T v) {
+                return detail::same_value(v, fill_value);
+            }))
             continue;
         result.push_back(make_chunk(index, buf));
     }
@@ -234,11 +232,10 @@ std::vector<Chunk> chunk_blocks_mpi(MPI_Comm comm, const std::vector<const T*>& 
 
 // One box per rank (count may be all zeros for a rank with no data).
 template <typename T>
-std::vector<Chunk> chunk_array_mpi(MPI_Comm comm, const T* local, const Box& mybox,
-                                   const std::vector<size_t>& shape,
-                                   const std::vector<size_t>& chunks, T fill_value,
-                                   bool write_empty_chunks = false,
-                                   KeyEncoding enc = KeyEncoding::V3Default)
+std::vector<Chunk>
+chunk_array_mpi(MPI_Comm comm, const T* local, const Box& mybox, const std::vector<size_t>& shape,
+                const std::vector<size_t>& chunks, T fill_value, bool write_empty_chunks = false,
+                KeyEncoding enc = KeyEncoding::V3Default)
 {
     return chunk_blocks_mpi<T>(comm, {local}, {mybox}, shape, chunks, fill_value,
                                write_empty_chunks, enc);
@@ -248,10 +245,9 @@ std::vector<Chunk> chunk_array_mpi(MPI_Comm comm, const T* local, const Box& myb
 // zarr.json, every rank writes the chunks it owns. `path` must be on a file
 // system all ranks share.
 template <typename T>
-void write_zarr_v3_mpi(MPI_Comm comm, const std::string& path, const T* local,
-                       const Box& mybox, const std::vector<size_t>& shape,
-                       const std::vector<size_t>& chunks, T fill_value,
-                       const std::vector<std::string>& dim_names = {},
+void write_zarr_v3_mpi(MPI_Comm comm, const std::string& path, const T* local, const Box& mybox,
+                       const std::vector<size_t>& shape, const std::vector<size_t>& chunks,
+                       T fill_value, const std::vector<std::string>& dim_names = {},
                        bool write_empty_chunks = false)
 {
     namespace fs = std::filesystem;
@@ -264,8 +260,8 @@ void write_zarr_v3_mpi(MPI_Comm comm, const std::string& path, const T* local,
     }
     MPI_Barrier(comm);
 
-    for (const Chunk& c : chunk_array_mpi(comm, local, mybox, shape, chunks, fill_value,
-                                          write_empty_chunks))
+    for (const Chunk& c :
+         chunk_array_mpi(comm, local, mybox, shape, chunks, fill_value, write_empty_chunks))
         write_chunk_file(path, c);
     MPI_Barrier(comm);
 }
