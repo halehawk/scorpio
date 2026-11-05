@@ -419,7 +419,12 @@ std::string json_number(T v)
             return v > 0 ? "\"Infinity\"" : "\"-Infinity\"";
         char buf[64];
         std::snprintf(buf, sizeof buf, "%.17g", static_cast<double>(v));
-        return buf;
+        // A float must look like one ("-999.0", not "-999"): zarr-python
+        // rejects an integer fill_value for a float data type
+        std::string s = buf;
+        if (s.find_first_of(".eE") == std::string::npos)
+            s += ".0";
+        return s;
     } else {
         return std::to_string(v);
     }
