@@ -4,9 +4,11 @@
 message(STATUS "===== Configuring SCORPIO C Core (I/O libraries)... =====")
 
 add_subdirectory (hdf5)
+add_subdirectory (zarr)
 
 add_library (spio_core_iolib OBJECT
-  $<TARGET_OBJECTS:spio_core_iolib_hdf5>)
+  $<TARGET_OBJECTS:spio_core_iolib_hdf5>
+  $<TARGET_OBJECTS:spio_core_iolib_zarr>)
 
 target_include_directories(spio_core_iolib
   PUBLIC .

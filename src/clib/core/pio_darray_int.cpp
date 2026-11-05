@@ -21,6 +21,10 @@
 #include "spio_dbg_utils.hpp"
 #include "spio_dt_converter.hpp"
 #include "spio_hdf5_utils.hpp"
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#include <vector>
+#endif
 
 /* 10MB default limit. */
 extern PIO_Offset pio_buffer_size_limit;
@@ -681,6 +685,94 @@ int write_darray_multi_par(file_desc_t *file, int nvars, int fndims, const int *
 
     return ierr;
 }
+
+#ifdef _SPIO_ZARR
+/**
+ * Write a set of one or more aggregated arrays to a PIO_IOTYPE_ZARR
+ * file. Each io task passes its regions of the data (or fill) buffer to
+ * spio_zarr_write_darray(), which assembles and writes whole Zarr chunks;
+ * the call is collective over the io tasks.
+ *
+ * @param file a pointer to the open file descriptor for the file
+ * that will be written to
+ * @param nvars the number of variables to be written with this
+ * decomposition.
+ * @param fndims the number of dimensions of the variables in the file.
+ * @param varids an array of the variable ids to be written.
+ * @param iodesc pointer to the io_desc_t info.
+ * @param fill Non-zero if this write is fill data.
+ * @param frame the record dimension for each of the nvars variables
+ * in iobuf. NULL if this iodesc contains non-record vars.
+ * @return 0 for success, error code otherwise.
+ * @ingroup PIO_write_darray
+ */
+int write_darray_multi_zarr(file_desc_t *file, int nvars, int fndims, const int *varids,
+                            io_desc_t *iodesc, int fill, const int *frame)
+{
+    iosystem_desc_t *ios;
+    var_desc_t *vdesc;
+    int ierr = PIO_NOERR;
+
+    pioassert(file && file->iosystem && varids && varids[0] >= 0 && varids[0] <= PIO_MAX_VARS &&
+              iodesc, "invalid input", __FILE__, __LINE__);
+    ios = file->iosystem;
+    if (!ios->ioproc)
+        return PIO_NOERR;
+
+    GPTLstart("PIO:write_darray_multi_zarr");
+    vdesc = file->varlist + varids[0];
+
+    int num_regions = fill ? iodesc->maxfillregions : iodesc->maxregions;
+    io_region *region = fill ? iodesc->fillregion : iodesc->firstregion;
+    PIO_Offset llen = fill ? iodesc->holegridsize : iodesc->llen;
+    void *iobuf = fill ? vdesc->fillbuf : spio_file_mvcache_get(file, iodesc->ioid);
+
+    /* The non-empty regions of this task, in file coordinates (the
+     * record of each variable is set below) */
+    std::vector<PIO_Offset> starts, counts, offsets;
+    for (int regioncnt = 0; regioncnt < num_regions && region; regioncnt++, region = region->next)
+    {
+        size_t start[fndims], count[fndims];
+        if ((ierr = spio_find_start_count(iodesc->ndims, iodesc->dimlen, fndims, vdesc, region,
+                                          start, count)))
+            break;
+        PIO_Offset dsize = 1;
+        for (int i = 0; i < fndims; i++)
+            dsize *= count[i];
+        if (dsize == 0)
+            continue;
+        starts.insert(starts.end(), start, start + fndims);
+        counts.insert(counts.end(), count, count + fndims);
+        offsets.push_back(region->loffset);
+    }
+    int nblocks = (int)offsets.size();
+
+    /* Every io task makes the same (collective) calls, even after an error */
+    for (int nv = 0; nv < nvars; nv++)
+    {
+        std::vector<PIO_Offset> vstarts(starts);
+        if (file->varlist[varids[nv]].record >= 0 && fndims > 1)
+            for (int b = 0; b < nblocks; b++)
+                vstarts[(size_t)b * fndims] = frame[nv];
+
+        char *bufptr = (char *)iobuf + (size_t)nv * iodesc->mpitype_size * llen;
+        std::vector<const void *> bufs(nblocks);
+        for (int b = 0; b < nblocks; b++)
+            bufs[b] = bufptr + (size_t)offsets[b] * iodesc->mpitype_size;
+
+        int ret = spio_zarr_write_darray(ios, file, varids[nv], iodesc, fndims, nblocks,
+                                         vstarts.data(), counts.data(), bufs.data());
+        if (ret != PIO_NOERR && ierr == PIO_NOERR)
+            ierr = pio_err(ios, file, ret, __FILE__, __LINE__,
+                           "Writing variable (%s, varid=%d) to file (%s, ncid=%d) using PIO_IOTYPE_ZARR failed",
+                           pio_get_vname_from_file(file, varids[nv]), varids[nv],
+                           pio_get_fname_from_file(file), file->pio_ncid);
+    }
+
+    GPTLstop("PIO:write_darray_multi_zarr");
+    return ierr;
+}
+#endif /* _SPIO_ZARR */
 
 /**
  * Fill the tmp_start and tmp_count arrays, which contain the start

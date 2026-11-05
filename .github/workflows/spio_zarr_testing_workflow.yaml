@@ -1,0 +1,131 @@
+---
+#
+# ========== SCORPIO native Zarr testing workflow ============
+# Builds SCORPIO with PIO_ENABLE_ZARR (the native, write-only Zarr v3
+# iotype PIO_IOTYPE_ZARR, written with the header-only zarr_chunk chunker)
+# and runs the Zarr tests: a Fortran program writes a Zarr store on 1, 3
+# and 4 tasks, all of them I/O tasks, with Zarr-chunked I/O decompositions,
+# and zarr-python/xarray check the store on disk. A default build (Zarr
+# off) is also checked to still configure and build.
+#
+name: SCORPIO native Zarr iotype - build and test
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  push:
+    branches:
+      - 'halehawk/**'
+    paths:
+      - 'tests/general/zarr/**'
+      - 'src/clib/**'
+      - 'src/flib/pio.F90'
+      - 'src/flib/pio_types.F90'
+      - 'src/flib/spio_init*.F90'
+      - 'CMakeLists.txt'
+      - 'tests/general/CMakeLists.txt'
+      - '.github/workflows/spio_zarr_testing_workflow.yaml'
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    env:
+      MPICH_CC: gcc-13
+      MPICH_CXX: g++-13
+      MPICH_FC: gfortran-13
+      MPICH_F77: gfortran-13
+      # Some runners have an Azure MANA adapter that UCX fails to initialize,
+      # which makes MPI_Init abort; restrict UCX to shared memory and TCP.
+      UCX_TLS: self,sm,tcp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install GCC 13
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-13 g++-13 gfortran-13
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: '3.12'
+          channels: conda-forge
+          auto-activate-base: false
+
+      - name: Install dependencies (MPI, parallel NetCDF, zarr)
+        shell: bash -l {0}
+        run: |
+          conda create -y -n scorpio_env -c conda-forge --override-channels \
+            python=3.12 cmake mpich mpich-mpicc mpich-mpicxx mpich-mpifort \
+            "gfortran_linux-64=14.*" \
+            "libnetcdf=*=mpi_mpich_*" "netcdf-fortran=*=mpi_mpich_*" \
+            "zarr>=3" numpy xarray
+          conda activate scorpio_env
+          conda list "netcdf|mpich|zarr|xarray"
+
+      - name: Configure SCORPIO
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          CC=mpicc CXX=mpicxx FC=mpif90 F77=mpif90 \
+            cmake \
+              -DWITH_PNETCDF:BOOL=OFF \
+              -DWITH_NETCDF:BOOL=ON \
+              -DPIO_ENABLE_ZARR:BOOL=ON \
+              -DNetCDF_PATH="${CONDA_PREFIX}" \
+              -DPython3_EXECUTABLE="$(which python)" \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DPIO_USE_MALLOC:BOOL=ON \
+              -DPIO_ENABLE_TESTS:BOOL=ON \
+              -DPLATFORM:STRING=linux-gnu \
+              -S . -B scorpio_build_dir 2>&1 | tee configure.log \
+          || { tail -n 150 scorpio_build_dir/CMakeFiles/CMakeConfigureLog.yaml; exit 1; }
+          grep -i "zarr" configure.log
+
+      - name: Build SCORPIO and the Zarr tests
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cmake --build scorpio_build_dir --parallel $(nproc) --target pioc piof
+          cmake --build scorpio_build_dir --parallel $(nproc) --target pio_zarr_f
+
+      - name: Run the Zarr tests
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cd scorpio_build_dir
+          ctest -R zarr_f --output-on-failure --timeout 300
+
+      - name: Show a store written by SCORPIO
+        if: always()
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          cd scorpio_build_dir/tests/general/zarr
+          find pio_zarr_f_np4.zarr -maxdepth 2 | sort | head -40 || true
+          cat pio_zarr_f_np4.zarr/T/zarr.json || true
+
+      - name: Build SCORPIO without the Zarr iotype (default)
+        shell: bash -l {0}
+        run: |
+          conda activate scorpio_env
+          CC=mpicc CXX=mpicxx FC=mpif90 F77=mpif90 \
+            cmake \
+              -DWITH_PNETCDF:BOOL=OFF \
+              -DWITH_NETCDF:BOOL=ON \
+              -DNetCDF_PATH="${CONDA_PREFIX}" \
+              -DPIO_USE_MALLOC:BOOL=ON \
+              -DPLATFORM:STRING=linux-gnu \
+              -S . -B default_build_dir
+          cmake --build default_build_dir --parallel $(nproc) --target pioc piof
+
+      - name: Upload test outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zarr-test-outputs
+          path: |
+            scorpio_build_dir/Testing/
+            scorpio_build_dir/tests/general/zarr/*.log
+          retention-days: 7

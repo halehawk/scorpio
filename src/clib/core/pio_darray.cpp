@@ -441,6 +441,15 @@ int PIOc_write_darray_multi_impl(int ncid, const int *varids, int ioid, int nvar
         }
 #endif
         break;
+#ifdef _SPIO_ZARR
+    case PIO_IOTYPE_ZARR:
+        if((ierr = write_darray_multi_zarr(file, nvars, fndims, varids, iodesc,
+                                            DARRAY_DATA, frame))){
+          return pio_err(ios, file, ierr, __FILE__, __LINE__,
+                          "Writing multiple variables to file (%s, ncid=%d) failed. Internal error writing variable data (iotype = %s)", pio_get_fname_from_file(file), ncid, pio_iotype_to_string(file->iotype));
+        }
+        break;
+#endif
     case PIO_IOTYPE_NETCDF4C:
     case PIO_IOTYPE_NETCDF:
         if((ierr = write_darray_multi_serial(file, nvars, fndims, varids, iodesc,
@@ -533,6 +542,15 @@ int PIOc_write_darray_multi_impl(int ncid, const int *varids, int ioid, int nvar
           }
   #endif
           break;
+#ifdef _SPIO_ZARR
+      case PIO_IOTYPE_ZARR:
+          if((ierr = write_darray_multi_zarr(file, nvars, fndims, varids, iodesc,
+                                              DARRAY_FILL, frame))){
+            return pio_err(ios, file, ierr, __FILE__, __LINE__,
+                        "Writing multiple variables to file (%s, ncid=%d) failed. Internal error writing variable fillvalues (iotype = %s)", pio_get_fname_from_file(file), ncid, pio_iotype_to_string(file->iotype));
+          }
+          break;
+#endif
       case PIO_IOTYPE_NETCDF4C:
       case PIO_IOTYPE_NETCDF:
           if((ierr = write_darray_multi_serial(file, nvars, fndims, varids, iodesc,

@@ -188,6 +188,9 @@ extern "C" {
     int CalcStartandCount(int pio_type, int ndims, const int *gdims, int num_io_procs,
                           int myiorank, PIO_Offset *start, PIO_Offset *count, int *num_aiotasks);
 
+    /* Guess a Zarr chunk shape for an array, as zarr-python does. */
+    void spio_guess_zarr_chunks(int ndims, const PIO_Offset *gdims, int typesize, PIO_Offset *chunks);
+
     /* Completes the mapping for the box rearranger. */
     int compute_counts(iosystem_desc_t *ios, io_desc_t *iodesc, const int *dest_ioproc,
                        const PIO_Offset *dest_ioindex);
@@ -326,6 +329,10 @@ extern "C" {
     /* Write aggregated arrays to file using parallel I/O (netCDF-4 parallel/pnetcdf) */
     int write_darray_multi_par(file_desc_t *file, int nvars, int fndims, const int *vid,
                                io_desc_t *iodesc, int fill, const int *frame);
+
+    /* Write aggregated arrays to a PIO_IOTYPE_ZARR file. */
+    int write_darray_multi_zarr(file_desc_t *file, int nvars, int fndims, const int *vid,
+                                io_desc_t *iodesc, int fill, const int *frame);
 
     /* Write aggregated arrays to file using serial I/O (netCDF-3/netCDF-4 serial) */
     int write_darray_multi_serial(file_desc_t *file, int nvars, int fndims, const int *vid,

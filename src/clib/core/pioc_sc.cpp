@@ -7,6 +7,7 @@
 #include <pio.h>
 #include <pio_internal.h>
 #include <pio_minmax.h>
+#include <math.h>
 
 /** The default target blocksize in bytes for each io task when the box
  * rearranger is used. */
@@ -15,6 +16,69 @@
 /** The target blocksize for each io task when the box rearranger is
  * used. */
 int blocksize = DEFAULT_BLOCKSIZE;
+
+/** If non-zero, the box rearranger splits arrays into Zarr chunks (see
+ * spio_guess_zarr_chunks()) and gives each io task whole chunks. */
+int zarr_decomp = 0;
+
+/**
+ * Guess a chunk shape for an array the way zarr-python does
+ * (zarr.core.chunk_grids._guess_regular_chunks, adapted from h5py):
+ * start with one chunk spanning the array and halve the dimensions in
+ * turn, starting with the first (slowest), until the chunk is close to
+ * a target size that grows with the array size (128 KiB to 64 MiB).
+ *
+ * @param ndims the number of dimensions.
+ * @param gdims array of length ndims with the global size of each dimension.
+ * @param typesize the size of one element in bytes.
+ * @param chunks array of length ndims that gets the chunk sizes.
+ */
+void spio_guess_zarr_chunks(int ndims, const PIO_Offset *gdims, int typesize, PIO_Offset *chunks)
+{
+    const double increment_bytes = 256 * 1024;
+    const double min_bytes = 128 * 1024;
+    const double max_bytes = 64 * 1024 * 1024;
+    double dchunks[PIO_MAX_DIMS];
+    double dset_size, target_size, chunk_elems;
+    int i, idx;
+
+    pioassert(ndims >= 0 && ndims <= PIO_MAX_DIMS && typesize > 0 && (ndims == 0 || (gdims && chunks)),
+              "invalid input", __FILE__, __LINE__);
+
+    dset_size = typesize;
+    for (i = 0; i < ndims; i++)
+    {
+        dchunks[i] = (gdims[i] > 1) ? (double)gdims[i] : 1.0;
+        dset_size *= dchunks[i];
+    }
+
+    target_size = increment_bytes * pow(2.0, log10(dset_size / (1024.0 * 1024)));
+    if (target_size > max_bytes)
+        target_size = max_bytes;
+    else if (target_size < min_bytes)
+        target_size = min_bytes;
+
+    for (idx = 0; ndims > 0; idx++)
+    {
+        double chunk_bytes;
+
+        chunk_elems = 1;
+        for (i = 0; i < ndims; i++)
+            chunk_elems *= dchunks[i];
+        chunk_bytes = chunk_elems * typesize;
+
+        if ((chunk_bytes < target_size || fabs(chunk_bytes - target_size) / target_size < 0.5) &&
+            chunk_bytes < max_bytes)
+            break;
+        if (chunk_elems == 1)
+            break;
+
+        dchunks[idx % ndims] = ceil(dchunks[idx % ndims] / 2.0);
+    }
+
+    for (i = 0; i < ndims; i++)
+        chunks[i] = (PIO_Offset)dchunks[i];
+}
 
 /**
  * Recursive Standard C Function: Greatest Common Divisor for PIO_Offset
@@ -341,14 +405,46 @@ int CalcStartandCount(int pio_type, int ndims, const int *gdims, int num_io_proc
                         "Internal error while calculating start/count for I/O decomposition. Finding MPI type corresponding to PIO type (%d) failed", pio_type);
     }
 
-    /* Find the total size of the data. */
-    total_data_size = base_size;
-    for (i = 0; i < ndims; i++)
-        total_data_size *= (long int)gdims[i];
+    /* With zarr_decomp the array is split into Zarr chunks and the
+     * partition below is done on the chunk grid (pdims), so that each
+     * IO task gets whole chunks. Otherwise it is done on the array. */
+    PIO_Offset chunks[PIO_MAX_DIMS];
+    int grid[PIO_MAX_DIMS];
+    const int *pdims = gdims;
+    bool by_chunks = false;
 
-    /* Reduce the number of ioprocs that are needed so that we have at least
-     * blocksize data (on avearge) on each iotask. */
-    use_io_procs = max(1, min((int)(total_data_size / blocksize), num_io_procs));
+    if (zarr_decomp && ndims <= PIO_MAX_DIMS)
+    {
+        PIO_Offset ldims[PIO_MAX_DIMS];
+        long int nchunks = 1;
+
+        for (i = 0; i < ndims; i++)
+            ldims[i] = gdims[i];
+        spio_guess_zarr_chunks(ndims, ldims, base_size, chunks);
+        for (i = 0; i < ndims; i++)
+        {
+            grid[i] = (int)((gdims[i] + chunks[i] - 1) / chunks[i]);
+            nchunks *= grid[i];
+        }
+        if (nchunks > 0)
+        {
+            pdims = grid;
+            by_chunks = true;
+            use_io_procs = (int)max(1L, min(nchunks, (long int)num_io_procs));
+        }
+    }
+
+    if (!by_chunks)
+    {
+        /* Find the total size of the data. */
+        total_data_size = base_size;
+        for (i = 0; i < ndims; i++)
+            total_data_size *= (long int)gdims[i];
+
+        /* Reduce the number of ioprocs that are needed so that we have at least
+         * blocksize data (on avearge) on each iotask. */
+        use_io_procs = max(1, min((int)(total_data_size / blocksize), num_io_procs));
+    }
 
     /* The partition algorithm below requires that use_io_procs is continuously
      * divisible by each outer dimension length, until the quotient is less than
@@ -367,8 +463,8 @@ int CalcStartandCount(int pio_type, int ndims, const int *gdims, int num_io_proc
     int gdims_partial_product = 1;
     for (i = 0; i < ndims; i++)
     {
-        if (gdims_partial_product * (long int)gdims[i] < (long int)use_io_procs)
-            gdims_partial_product *= gdims[i];
+        if (gdims_partial_product * (long int)pdims[i] < (long int)use_io_procs)
+            gdims_partial_product *= pdims[i];
         else
             break;
     }
@@ -383,7 +479,7 @@ int CalcStartandCount(int pio_type, int ndims, const int *gdims, int num_io_proc
         for (i = 0; i < ndims; i++)
         {
             start[i] = 0;
-            count[i] = gdims[i];
+            count[i] = pdims[i];
         }
 
         if (use_io_procs > 1)
@@ -392,21 +488,32 @@ int CalcStartandCount(int pio_type, int ndims, const int *gdims, int num_io_proc
             tiorank = myiorank;
             for (i = 0; i < ndims; i++)
             {
-                if (gdims[i] >= ioprocs)
+                if (pdims[i] >= ioprocs)
                 {
-                    compute_one_dim(gdims[i], ioprocs, tiorank, &start[i], &count[i]);
-                    assert(start[i] + count[i] <= gdims[i]);
+                    compute_one_dim(pdims[i], ioprocs, tiorank, &start[i], &count[i]);
+                    assert(start[i] + count[i] <= pdims[i]);
                     break; /* Terminate on this dimension */
                 }
-                else if (gdims[i] > 1)
+                else if (pdims[i] > 1)
                 {
-                    assert(ioprocs % gdims[i] == 0);
-                    tioprocs = gdims[i];
+                    assert(ioprocs % pdims[i] == 0);
+                    tioprocs = pdims[i];
                     tiorank = (myiorank * tioprocs) / ioprocs;
-                    compute_one_dim(gdims[i], tioprocs, tiorank, &start[i], &count[i]);
+                    compute_one_dim(pdims[i], tioprocs, tiorank, &start[i], &count[i]);
                     ioprocs = ioprocs / tioprocs;
                     tiorank  = myiorank % ioprocs;
                 }
+            }
+        }
+
+        /* Chunk grid -> array elements; the last chunk along a dimension
+         * may be cut short by the array edge. */
+        if (by_chunks)
+        {
+            for (i = 0; i < ndims; i++)
+            {
+                start[i] *= chunks[i];
+                count[i] = min(count[i] * chunks[i], (PIO_Offset)gdims[i] - start[i]);
             }
         }
     }

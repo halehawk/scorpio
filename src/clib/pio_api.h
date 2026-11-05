@@ -94,6 +94,8 @@ int PIOc_set_chunk_cache(int iosysid, int iotype, PIO_Offset size, PIO_Offset ne
 int PIOc_get_chunk_cache(int iosysid, int iotype, PIO_Offset *sizep, PIO_Offset *nelemsp,
                          float *preemptionp);
 int PIOc_set_blocksize(int newblocksize);
+/* Split box rearranger I/O decompositions into Zarr chunks. */
+int PIOc_set_zarr_decomp(int enable);
 /* Set the IO node data buffer size limit. */
 PIO_Offset PIOc_set_buffer_size_limit(PIO_Offset limit);
 

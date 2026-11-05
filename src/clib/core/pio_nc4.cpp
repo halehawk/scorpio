@@ -6,6 +6,9 @@
 #include <pio_config.h>
 #include <pio.h>
 #include <pio_internal.h>
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#endif
 #include "spio_io_summary.h"
 
 /**
@@ -272,6 +275,20 @@ int PIOc_def_var_chunking_impl(int ncid, int varid, int storage, const PIO_Offse
     spio_ltimer_start(ios->io_fstats->tot_timer_name);
     spio_ltimer_start(file->io_fstats->tot_timer_name);
 
+#ifdef _SPIO_ZARR
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        ierr = spio_zarr_def_var_chunking(file, varid, storage, chunksizesp);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        if (ierr != PIO_NOERR)
+            return pio_err(ios, file, ierr, __FILE__, __LINE__,
+                           "Defining variable chunking parameters for variable %s (varid=%d) failed on file %s (ncid=%d, iotype=PIO_IOTYPE_ZARR)",
+                           pio_get_vname_from_file(file, varid), varid, pio_get_fname_from_file(file), ncid);
+        return PIO_NOERR;
+    }
+#endif
+
     /* Only netCDF-4 files can use this feature. */
     if (file->iotype != PIO_IOTYPE_NETCDF4P && file->iotype != PIO_IOTYPE_NETCDF4P_NCZARR && file->iotype != PIO_IOTYPE_NETCDF4C)
     {
@@ -413,6 +430,16 @@ int PIOc_inq_var_chunking_impl(int ncid, int varid, int *storagep, PIO_Offset *c
     assert(ios);
     spio_ltimer_start(ios->io_fstats->tot_timer_name);
     spio_ltimer_start(file->io_fstats->tot_timer_name);
+
+#ifdef _SPIO_ZARR
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        ierr = spio_zarr_inq_var_chunking(file, varid, storagep, chunksizesp);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return ierr;
+    }
+#endif
 
     /* Only netCDF-4 files can use this feature. */
     if (file->iotype != PIO_IOTYPE_NETCDF4P && file->iotype != PIO_IOTYPE_NETCDF4P_NCZARR && file->iotype != PIO_IOTYPE_NETCDF4C)

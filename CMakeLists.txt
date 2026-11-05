@@ -55,6 +55,7 @@ option (PIO_LIMIT_CACHED_IO_REGIONS  "Limit the number of non-contiguous regions
 option (WITH_PNETCDF         "Require the use of PnetCDF"                   ON)
 option (WITH_NETCDF          "Require the use of NetCDF"                    ON)
 option (PIO_ENABLE_NCZARR    "Enable support for NCZarr (via NetCDF)"       OFF)
+option (PIO_ENABLE_ZARR      "Enable the native Zarr iotype (needs C++17)"  OFF)
 option (WITH_ADIOS2          "Require the use of ADIOS 2.x"                 OFF)
 option (WITH_HDF5            "Require the use of HDF5"                      OFF)
 option (SPIO_HDF5_FLUSH_AFTER_COLL_WR   "Flush file buffers after each collective write"  OFF)

@@ -21,7 +21,7 @@ set (spio_clib_bin_dir "${CMAKE_CURRENT_BINARY_DIR}/../..")
 
 target_include_directories(spio_core_util
   PUBLIC .
-  PRIVATE ${spio_clib_src_dir} ${spio_clib_bin_dir} ${spio_clib_src_dir}/util ${spio_clib_src_dir}/core)
+  PRIVATE ${spio_clib_src_dir} ${spio_clib_bin_dir} ${spio_clib_src_dir}/util ${spio_clib_src_dir}/core ${spio_clib_src_dir}/core/iolib/zarr)
 
 target_link_libraries(spio_core_util
   PUBLIC spio_default_public_options

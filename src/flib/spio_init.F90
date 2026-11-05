@@ -31,7 +31,7 @@ MODULE spio_init
   PUBLIC :: pio_init, pio_finalize,&
             pio_iosystem_is_active, pio_iotask_rank, pio_iam_iotask,&
             pio_getnumiotasks, pio_get_numiotasks, pio_set_hint,&
-            pio_set_rearr_opts, pio_set_blocksize
+            pio_set_rearr_opts, pio_set_blocksize, pio_set_zarr_decomp
 
 !> @defgroup PIO_init PIO_init
 !! @public
@@ -655,5 +655,33 @@ CONTAINS
     ! call t_stopf("PIO:pio_set_blocksize")
 #endif
   END SUBROUTINE pio_set_blocksize
+
+!> @defgroup PIO_set_zarr_decomp PIO_set_zarr_decomp
+!! @public
+!! @brief Split BOX rearranger I/O decompositions into Zarr chunks.
+!!
+!! @details
+!! When enabled, decompositions created afterwards (pio_initdecomp) split
+!! each array into the chunks zarr-python would choose for it, and each
+!! I/O process gets a box of whole chunks. NCZarr variables defined
+!! afterwards get the same chunks (time chunk 1) unless
+!! pio_def_var_chunking sets other ones.
+!! @param[in] enable .true. to turn Zarr decompositions on, .false. to
+!! turn them off (the default)
+!! @param[out] ierr (Optional) @copydoc error_return
+!!
+  SUBROUTINE pio_set_zarr_decomp(enable, ierr)
+    LOGICAL, INTENT(IN) :: enable
+    INTEGER, OPTIONAL, INTENT(OUT) :: ierr
+
+    INTEGER(C_INT) :: cenable, cerr
+
+    cenable = 0
+    IF(enable) cenable = 1
+    cerr = PIOc_set_zarr_decomp(cenable)
+    IF(PRESENT(ierr)) THEN
+      ierr = INT(cerr)
+    ENDIF
+  END SUBROUTINE pio_set_zarr_decomp
 
 END MODULE spio_init

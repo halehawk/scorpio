@@ -810,3 +810,8 @@ add_pio_test(pio_iosystem_tests3
 if (PIO_ENABLE_NCZARR AND NetCDF_C_HAS_NCZARR)
   add_subdirectory(nczarr)
 endif ()
+
+#===== Native Zarr iotype tests =====
+if (PIO_ENABLE_ZARR)
+  add_subdirectory(zarr)
+endif ()

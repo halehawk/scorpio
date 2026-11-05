@@ -15,6 +15,9 @@
 #include <algorithm>
 #include <functional>
 #include "spio_hdf5_utils.hpp"
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#endif
 #include "spio_async_tcomm.hpp"
 
 #ifdef _ADIOS2
@@ -402,6 +405,11 @@ static int sync_file(int ncid)
             case PIO_IOTYPE_HDF5:
             case PIO_IOTYPE_HDF5C:
                 ierr = PIO_NOERR;
+                break;
+#endif
+#ifdef _SPIO_ZARR
+            case PIO_IOTYPE_ZARR:
+                ierr = spio_zarr_sync(ios, file);
                 break;
 #endif
             default:
@@ -851,6 +859,11 @@ int spio_hard_closefile(iosystem_desc_t *ios, file_desc_t *file,
         case PIO_IOTYPE_HDF5:
         case PIO_IOTYPE_HDF5C:
             ierr = spio_hdf5_close(ios, file);
+            break;
+#endif
+#ifdef _SPIO_ZARR
+        case PIO_IOTYPE_ZARR:
+            ierr = spio_zarr_close(ios, file);
             break;
 #endif
         default:

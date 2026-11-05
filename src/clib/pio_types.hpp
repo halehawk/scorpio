@@ -888,6 +888,9 @@ typedef struct file_desc_t
     /** A datatype converter for user buffers */
     void *dt_converter;
 
+    /** In-memory metadata of a PIO_IOTYPE_ZARR file (see spio_zarr.hpp) */
+    void *zarr_file;
+
     /* File name - cached */
     char fname[PIO_MAX_NAME + 1];
 

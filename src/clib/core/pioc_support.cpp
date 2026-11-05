@@ -30,6 +30,9 @@
 #include "spio_decomp_logger.hpp"
 #include "spio_async_utils.hpp"
 #include "spio_hdf5_utils.hpp"
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#endif
 #if PIO_USE_ASYNC_WR_THREAD
 #include "spio_async_hdf5_utils.hpp"
 #endif
@@ -2798,6 +2801,13 @@ int PIO_get_avail_iotypes(char *buf, size_t sz)
     cbuf = buf + strlen(buf);
 #endif
 
+#ifdef _SPIO_ZARR
+    assert(sz > 0);
+    snprintf(cbuf, sz, ", %s (%d)", pio_iotype_to_string(PIO_IOTYPE_ZARR), PIO_IOTYPE_ZARR);
+    sz = max_sz - strlen(buf);
+    cbuf = buf + strlen(buf);
+#endif
+
     return ret;
 }
 
@@ -3315,6 +3325,15 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                 file->num_written_blocks += 2;
             }
         }
+    }
+#endif
+
+#ifdef _SPIO_ZARR
+    /* Zarr metadata is kept on all tasks; io rank 0 creates the store */
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        file->do_io = 0; /* No NetCDF calls for this file */
+        ierr = spio_zarr_create(ios, file, filename);
     }
 #endif
 
@@ -4572,6 +4591,12 @@ int PIOc_openfile_retry_impl(int iosysid, int *ncidp, int *iotype, const char *f
                     "Opening file (%s) failed. Invalid iotype (%s:%d) specified. Available iotypes are : %s", filename, pio_iotype_to_string(*iotype), *iotype, avail_iotypes);
   }
 
+  /* The Zarr iotype is write only */
+  if(*iotype == PIO_IOTYPE_ZARR){
+    return pio_err(ios, NULL, PIO_EINVAL, __FILE__, __LINE__,
+                    "Opening file (%s) failed. PIO_IOTYPE_ZARR does not support reading files", filename);
+  }
+
   spio_ltimer_start(ios->io_fstats->rd_timer_name);
   spio_ltimer_start(ios->io_fstats->tot_timer_name);
 
@@ -5505,6 +5530,10 @@ int iotype_is_valid(int iotype)
 #endif
 
 #endif /* _HDF5 */
+
+#ifdef _SPIO_ZARR
+    if(iotype == PIO_IOTYPE_ZARR) { ret++; }
+#endif
 
     return ret;
 }

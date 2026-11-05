@@ -31,6 +31,7 @@ add_library (spio_core OBJECT
   $<TARGET_OBJECTS:spio_core_rearr>
   $<TARGET_OBJECTS:spio_core_iolib>
   $<TARGET_OBJECTS:spio_core_iolib_hdf5>
+  $<TARGET_OBJECTS:spio_core_iolib_zarr>
   ${spio_core_src})
 
 set (spio_clib_src_dir "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -38,7 +39,7 @@ set (spio_clib_bin_dir "${CMAKE_CURRENT_BINARY_DIR}/..")
 
 target_include_directories(spio_core
   PUBLIC .
-  PRIVATE ${spio_clib_src_dir} ${spio_clib_bin_dir} ${spio_clib_src_dir}/util ${CMAKE_CURRENT_SOURCE_DIR}/util ${CMAKE_CURRENT_SOURCE_DIR}/progress_engine ${CMAKE_CURRENT_SOURCE_DIR}/rearr ${CMAKE_CURRENT_SOURCE_DIR}/iolib/hdf5)
+  PRIVATE ${spio_clib_src_dir} ${spio_clib_bin_dir} ${spio_clib_src_dir}/util ${CMAKE_CURRENT_SOURCE_DIR}/util ${CMAKE_CURRENT_SOURCE_DIR}/progress_engine ${CMAKE_CURRENT_SOURCE_DIR}/rearr ${CMAKE_CURRENT_SOURCE_DIR}/iolib/hdf5 ${CMAKE_CURRENT_SOURCE_DIR}/iolib/zarr)
 
 target_link_libraries(spio_core
   PUBLIC spio_default_public_options

@@ -197,6 +197,13 @@ else ()
   set(PIO_USE_ADIOS 0)
 endif ()
 
+#===== Zarr (native, header-only zarr_chunk) =====
+if (PIO_ENABLE_ZARR)
+  message(STATUS "Enabling support for the native Zarr iotype")
+  target_compile_definitions (spio_default_public_options
+    INTERFACE _SPIO_ZARR)
+endif ()
+
 #===== HDF5-C =====
 if (WITH_HDF5)
   find_package (HDF5 COMPONENTS HL C)
@@ -493,7 +500,8 @@ set (SPIO_PIOC_OBJS
   $<TARGET_OBJECTS:spio_core_progress_engine>
   $<TARGET_OBJECTS:spio_core_rearr>
   $<TARGET_OBJECTS:spio_core_iolib>
-  $<TARGET_OBJECTS:spio_core_iolib_hdf5>)
+  $<TARGET_OBJECTS:spio_core_iolib_hdf5>
+  $<TARGET_OBJECTS:spio_core_iolib_zarr>)
 
 if (ADIOS2_FOUND)
   set (SPIO_PIOC_OBJS ${SPIO_PIOC_OBJS} $<TARGET_OBJECTS:adios2pio-nm-lib-objs>)

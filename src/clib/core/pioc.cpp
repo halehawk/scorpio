@@ -50,6 +50,7 @@ int default_error_handler = PIO_INTERNAL_ERROR;
 /** The target blocksize for each io task when the box rearranger is
  * used (see pio_sc.c). */
 extern int blocksize;
+extern int zarr_decomp;
 
 /**
  * Check to see if PIO has been initialized.
@@ -1944,6 +1945,10 @@ int PIOc_iotype_available_impl(int iotype)
     case PIO_IOTYPE_PNETCDF:
         return 1;
 #endif
+#ifdef _SPIO_ZARR
+    case PIO_IOTYPE_ZARR:
+        return 1;
+#endif
     default:
         return 0;
     }
@@ -3201,5 +3206,24 @@ int PIOc_set_blocksize_impl(int newblocksize)
     }
 
     blocksize = newblocksize;
+    return PIO_NOERR;
+}
+
+/**
+ * Turn on (or off) Zarr chunking of the I/O decomposition for the box
+ * rearranger. When on, decompositions created afterwards split each
+ * array into the chunks zarr-python would choose for it
+ * (spio_guess_zarr_chunks()) and give each io task a box of whole
+ * chunks; NCZarr variables defined afterwards get the same chunks
+ * (time chunk 1) unless PIOc_def_var_chunking() sets other ones.
+ *
+ * @param enable non-zero to turn Zarr decompositions on, 0 to turn
+ * them off (the default).
+ * @returns 0 for success.
+ * @ingroup PIO_set_blocksize
+ */
+int PIOc_set_zarr_decomp_impl(int enable)
+{
+    zarr_decomp = (enable != 0);
     return PIO_NOERR;
 }

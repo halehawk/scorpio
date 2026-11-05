@@ -431,7 +431,10 @@ enum PIO_IOTYPE
     PIO_IOTYPE_HDF5 = 8,
 
     /** HDF5 library (Parallel I/O, NetCDF4/HDF5 compressed file format) */
-    PIO_IOTYPE_HDF5C = 9
+    PIO_IOTYPE_HDF5C = 9,
+
+    /** Native Zarr v3 writer (Parallel I/O, Zarr directory store, write only) */
+    PIO_IOTYPE_ZARR = 10
 };
 
 /**

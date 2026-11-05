@@ -16,6 +16,9 @@
 #include "spio_io_summary.h"
 #include "spio_hash.h"
 #include "spio_dt_converter.hpp"
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#endif
 #include <mutex>
 #include <thread>
 #include <chrono>
@@ -139,6 +142,12 @@ int pio_free_file(file_desc_t *file)
   free(file->unlim_dimids);
   free(file->io_fstats);
   spio_file_mvcache_finalize(file);
+
+#ifdef _SPIO_ZARR
+  if(file->zarr_file != NULL){
+    spio_zarr_free(file);
+  }
+#endif
 
 #ifdef _HDF5
   if(file->dt_converter != NULL){

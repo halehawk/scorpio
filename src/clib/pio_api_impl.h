@@ -93,6 +93,7 @@ int PIOc_set_chunk_cache_impl(int iosysid, int iotype, PIO_Offset size, PIO_Offs
 int PIOc_get_chunk_cache_impl(int iosysid, int iotype, PIO_Offset *sizep, PIO_Offset *nelemsp,
                          float *preemptionp);
 int PIOc_set_blocksize_impl(int newblocksize);
+int PIOc_set_zarr_decomp_impl(int enable);
 /* Set the IO node data buffer size limit. */
 PIO_Offset PIOc_set_buffer_size_limit_impl(PIO_Offset limit);
 

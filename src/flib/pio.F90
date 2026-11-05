@@ -15,7 +15,8 @@ module pio
                           pio_readdof, pio_writedof
   use spio_init, only : pio_init, pio_finalize, pio_iosystem_is_active,&
                         pio_iotask_rank, pio_iam_iotask, pio_getnumiotasks, pio_get_numiotasks,&
-                        pio_set_hint, pio_set_rearr_opts, pio_set_blocksize
+                        pio_set_hint, pio_set_rearr_opts, pio_set_blocksize,&
+                        pio_set_zarr_decomp
   use spio_file, only : pio_openfile, pio_createfile, pio_closefile,&
                         pio_deletefile, pio_setframe, pio_advanceframe,&
                         pio_syncfile, pio_file_is_open, pio_set_fill
@@ -29,7 +30,7 @@ module pio
        pio_int, pio_real, pio_double, pio_noerr, iotype_netcdf, &
        iotype_pnetcdf,  pio_iotype_netcdf4p, pio_iotype_netcdf4p_nczarr, pio_iotype_netcdf4c, &
        pio_iotype_pnetcdf, pio_iotype_netcdf, pio_iotype_adios, pio_iotype_adiosc, &
-       pio_iotype_hdf5, pio_iotype_hdf5c, &
+       pio_iotype_hdf5, pio_iotype_hdf5c, pio_iotype_zarr, &
        pio_global, pio_char, pio_write, pio_nowrite, pio_clobber, pio_noclobber, &
        pio_max_name, pio_max_var_dims,&
        pio_rearr_subset, pio_rearr_box, pio_rearr_any, pio_rearr_contig,&

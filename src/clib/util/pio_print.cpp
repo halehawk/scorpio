@@ -23,6 +23,8 @@ const char *pio_iotype_to_string(int iotype)
                               return "PIO_IOTYPE_HDF5";
     case PIO_IOTYPE_HDF5C:
                               return "PIO_IOTYPE_HDF5C";
+    case PIO_IOTYPE_ZARR:
+                              return "PIO_IOTYPE_ZARR";
     default:
                               return "UNKNOWN";
   }

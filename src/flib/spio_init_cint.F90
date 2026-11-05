@@ -279,4 +279,20 @@ INTERFACE
   END FUNCTION PIOc_set_blocksize
 END INTERFACE
 
+INTERFACE
+!! @private
+!! @brief Split BOX rearranger I/O decompositions into Zarr chunks.
+!!
+!! @details
+!! @param[in] enable 1 to turn Zarr decompositions on, 0 to turn them off
+!! @returns PIO_NOERR on success, an error code otherwise
+!!
+  INTEGER(C_INT) FUNCTION PIOc_set_zarr_decomp(enable)&
+                          bind(C,name="PIOc_set_zarr_decomp")
+    USE iso_c_binding
+
+    INTEGER(C_INT), INTENT(IN), VALUE :: enable
+  END FUNCTION PIOc_set_zarr_decomp
+END INTERFACE
+
 END MODULE spio_init_cint

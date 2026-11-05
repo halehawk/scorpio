@@ -403,6 +403,12 @@ int PIOc_set_blocksize(int newblocksize)
   return PIOc_set_blocksize_impl(newblocksize);
 }
 
+int PIOc_set_zarr_decomp(int enable)
+{
+  /* FIXME: Figure out how to trace these non I/O system specific calls */
+  return PIOc_set_zarr_decomp_impl(enable);
+}
+
 /* Set the IO node data buffer size limit. */
 PIO_Offset PIOc_set_buffer_size_limit(PIO_Offset limit)
 {

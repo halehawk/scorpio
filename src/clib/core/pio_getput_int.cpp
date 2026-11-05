@@ -12,6 +12,9 @@
 #include "spio_io_summary.h"
 #include "spio_hash.h"
 #include "spio_hdf5_utils.hpp"
+#ifdef _SPIO_ZARR
+#include "spio_zarr.hpp"
+#endif
 #if PIO_USE_ASYNC_WR_THREAD
 #include "spio_async_hdf5_utils.hpp"
 #endif
@@ -345,6 +348,23 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
     }
 #endif
 
+#ifdef _SPIO_ZARR
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        ierr = spio_zarr_put_att(file, varid, name, atttype, len, memtype, op);
+        GPTLstop("PIO:write_total");
+        spio_ltimer_stop(ios->io_fstats->wr_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->wr_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        if (ierr != PIO_NOERR)
+            return pio_err(ios, file, ierr, __FILE__, __LINE__,
+                           "Writing variable (%s, varid=%d) attribute (%s) to file (%s, ncid=%d) using PIO_IOTYPE_ZARR failed",
+                           pio_get_vname_from_file(file, varid), varid, name, pio_get_fname_from_file(file), ncid);
+        return PIO_NOERR;
+    }
+#endif
+
 #ifdef _HDF5
     if ((file->iotype == PIO_IOTYPE_HDF5) || (file->iotype == PIO_IOTYPE_HDF5C))
     {
@@ -467,7 +487,8 @@ int spio_put_att_tc(int ncid, int varid, const char *name, nc_type atttype,
 
         if (file->iotype != PIO_IOTYPE_PNETCDF &&
             file->iotype != PIO_IOTYPE_ADIOS && file->iotype != PIO_IOTYPE_ADIOSC &&
-            file->iotype != PIO_IOTYPE_HDF5 && file->iotype != PIO_IOTYPE_HDF5C && file->do_io)
+            file->iotype != PIO_IOTYPE_HDF5 && file->iotype != PIO_IOTYPE_HDF5C &&
+            file->iotype != PIO_IOTYPE_ZARR && file->do_io)
         {
             if (ios->iomaster == MPI_ROOT)
             {
@@ -593,6 +614,20 @@ int spio_get_att_tc(int ncid, int varid, const char *name, nc_type memtype, void
 
     spio_ltimer_start(ios->io_fstats->rd_timer_name);
     spio_ltimer_start(ios->io_fstats->tot_timer_name);
+
+#ifdef _SPIO_ZARR
+    /* The Zarr iotype is write only */
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, file, PIO_EINVAL, __FILE__, __LINE__,
+                       "Reading an attribute from file (%s, ncid=%d) failed. PIO_IOTYPE_ZARR does not support reading",
+                       pio_get_fname_from_file(file), ncid);
+    }
+#endif
 
     /* User must provide a name and destination pointer. */
     if (!name || !ip || strlen(name) > PIO_MAX_NAME)
@@ -1023,6 +1058,20 @@ int spio_get_vars_tc(int ncid, int varid, const PIO_Offset *start, const PIO_Off
 
     spio_ltimer_start(ios->io_fstats->rd_timer_name);
     spio_ltimer_start(ios->io_fstats->tot_timer_name);
+
+#ifdef _SPIO_ZARR
+    /* The Zarr iotype is write only */
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        spio_ltimer_stop(ios->io_fstats->rd_timer_name);
+        spio_ltimer_stop(ios->io_fstats->tot_timer_name);
+        spio_ltimer_stop(file->io_fstats->rd_timer_name);
+        spio_ltimer_stop(file->io_fstats->tot_timer_name);
+        return pio_err(ios, file, PIO_EINVAL, __FILE__, __LINE__,
+                       "Reading a variable from file (%s, ncid=%d) failed. PIO_IOTYPE_ZARR does not support reading",
+                       pio_get_fname_from_file(file), ncid);
+    }
+#endif
 
     /* User must provide a place to put some data. */
     if (!buf)
@@ -3288,6 +3337,18 @@ int spio_put_vars_tc(int ncid, int varid, const PIO_Offset *start, const PIO_Off
         }
 #endif /* _PNETCDF */
 
+#ifdef _SPIO_ZARR
+    if (file->iotype == PIO_IOTYPE_ZARR)
+    {
+        if (ios->iomaster == MPI_ROOT)
+        {
+            ios->io_fstats->wb += num_elem * typelen;
+            file->io_fstats->wb += num_elem * typelen;
+        }
+        ierr = spio_zarr_put_var(ios, file, varid, start, count, stride, xtype, buf);
+    }
+#endif /* _SPIO_ZARR */
+
 #ifdef _HDF5
     if ((file->iotype == PIO_IOTYPE_HDF5) || (file->iotype == PIO_IOTYPE_HDF5C))
     {
@@ -3307,7 +3368,8 @@ int spio_put_vars_tc(int ncid, int varid, const PIO_Offset *start, const PIO_Off
 
         if (file->iotype != PIO_IOTYPE_PNETCDF &&
             file->iotype != PIO_IOTYPE_ADIOS && file->iotype != PIO_IOTYPE_ADIOSC &&
-            file->iotype != PIO_IOTYPE_HDF5 && file->iotype != PIO_IOTYPE_HDF5C && file->do_io)
+            file->iotype != PIO_IOTYPE_HDF5 && file->iotype != PIO_IOTYPE_HDF5C &&
+            file->iotype != PIO_IOTYPE_ZARR && file->do_io)
         {
             LOG((2, "spio_put_vars_tc calling netcdf function file->iotype = %d",
                  file->iotype));
