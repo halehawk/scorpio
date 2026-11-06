@@ -41,13 +41,13 @@ program pio_zarr_f
   character(len=*), parameter :: TITLE = "SCORPIO native Zarr Fortran test"
 
   type(iosystem_desc_t) :: iosys
-  type(file_desc_t)     :: file
+  type(file_desc_t)     :: file, file2
   type(io_desc_t)       :: iodesc_d, iodesc_i
   type(var_desc_t)      :: vd_lat, vd_lon, vd_time, vd_scale, vd_t, vd_tf, vd_u, vd_mask
   integer(PIO_OFFSET_KIND), allocatable :: compdof(:), compdof_i(:)
   double precision, allocatable :: t(:), u(:), coord(:)
   integer, allocatable :: mask(:)
-  integer :: my_rank, nprocs, nrows, iotype, ret, ierr, nerr, nerr_all
+  integer :: my_rank, nprocs, nrows, iotype, ret, ierr, nerr, nerr_all, old_eh
   integer :: dim_lat, dim_lon, dim_time, f, i, j, k, storage, chunks(3), varid
   integer(PIO_OFFSET_KIND) :: dimlen
   character(len=PIO_MAX_NAME) :: fname
@@ -175,8 +175,16 @@ program pio_zarr_f
   end do
   call pio_closefile(file)
 
+  ! Creating over the existing store with PIO_NOCLOBBER must fail (and free
+  ! the Zarr metadata of the failed file) and leave the store untouched
+  call pio_seterrorhandling(iosys, PIO_RETURN_ERROR, old_eh)
+  ret = pio_createfile(iosys, file2, iotype, trim(fname), PIO_NOCLOBBER)
+  call expect(ret /= PIO_noerr, "pio_createfile PIO_NOCLOBBER result on an existing store")
+  call pio_seterrorhandling(iosys, old_eh)
+
   call pio_freedecomp(iosys, iodesc_d)
   call pio_freedecomp(iosys, iodesc_i)
+  deallocate(compdof, compdof_i, t, u, mask, coord)
   call pio_finalize(iosys, ret)
 
   call MPI_Allreduce(nerr, nerr_all, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)

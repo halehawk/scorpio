@@ -3614,6 +3614,10 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
             }
         }
 #endif
+#ifdef _SPIO_ZARR
+        if (file->zarr_file != NULL)
+            spio_zarr_free(file);
+#endif
         spio_ltimer_stop(file->io_fstats->wr_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
         delete(file->pmtx);
@@ -3639,6 +3643,10 @@ int spio_createfile_int(int iosysid, int *ncidp, const int *iotype, const char *
                 file->filename = NULL;
             }
         }
+#endif
+#ifdef _SPIO_ZARR
+        if (file->zarr_file != NULL)
+            spio_zarr_free(file);
 #endif
         spio_ltimer_stop(file->io_fstats->wr_timer_name);
         spio_ltimer_stop(file->io_fstats->tot_timer_name);
